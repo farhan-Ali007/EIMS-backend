@@ -3,7 +3,10 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import Admin from '../models/Admin.js';
 import Seller from '../models/Seller.js';
-import { authenticate } from '../middleware/auth.js';
+import InviteCode from '../models/InviteCode.js';
+import { authenticate, authorizeAdmin } from '../middleware/auth.js';
+import sendEmail from '../utils/sendEmail.js';
+import { passwordResetTemplate, passwordChangedTemplate } from '../utils/emailTemplates.js';
 
 const router = express.Router();
 
@@ -14,12 +17,49 @@ const generateToken = (id) => {
   });
 };
 
+// Helper to generate a secure random invite code
+const generateInviteCode = () => {
+  return crypto.randomBytes(8).toString('hex'); // 16 chars, 64-bit entropy
+};
+
+// Ensure there is always an invite code document present
+const getOrCreateInviteCode = async () => {
+  let doc = await InviteCode.findOne();
+  if (!doc) {
+    doc = await InviteCode.create({ code: generateInviteCode() });
+  }
+  return doc;
+};
+
+// @route   GET /api/auth/invite-code
+// @desc    Get current invite code (admin only)
+// @access  Private (admin/superadmin)
+router.get('/invite-code', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const current = await getOrCreateInviteCode();
+    res.json({ code: current.code });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @route   POST /api/auth/register
-// @desc    Register new admin
-// @access  Public (You can make this private later)
+// @desc    Register new admin (protected by rotating invite code)
+// @access  Public (requires valid invite code)
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, inviteCode } = req.body;
+
+    // Require invite code
+    if (!inviteCode) {
+      return res.status(403).json({ message: 'Invite code is required to register' });
+    }
+
+    const current = await getOrCreateInviteCode();
+
+    if (inviteCode !== current.code) {
+      return res.status(403).json({ message: 'Invalid or expired invite code' });
+    }
     
     // Check if admin already exists
     const existingAdmin = await Admin.findOne({ $or: [{ email }, { username }] });
@@ -37,6 +77,10 @@ router.post('/register', async (req, res) => {
     });
     
     await admin.save();
+
+    // Rotate invite code after successful signup
+    current.code = generateInviteCode();
+    await current.save();
     
     // Generate token
     const token = generateToken(admin._id);
@@ -236,7 +280,7 @@ router.put('/change-password', authenticate, async (req, res) => {
 });
 
 // @route   POST /api/auth/forgot-password
-// @desc    Generate password reset token
+// @desc    Generate password reset token and send email
 // @access  Public
 router.post('/forgot-password', async (req, res) => {
   try {
@@ -246,13 +290,20 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Please provide email address' });
     }
     
-    const admin = await Admin.findOne({ email });
+    // Check if user exists (Admin or Seller)
+    let user = await Admin.findOne({ email });
+    let userType = 'admin';
     
-    if (!admin) {
+    if (!user) {
+      user = await Seller.findOne({ email });
+      userType = 'seller';
+    }
+    
+    if (!user) {
       // Don't reveal if email exists or not for security
       return res.json({ 
         success: true, 
-        message: 'If an account exists with this email, a reset token has been generated.' 
+        message: 'If an account exists with this email, a password reset link has been sent.' 
       });
     }
     
@@ -260,26 +311,54 @@ router.post('/forgot-password', async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString('hex');
     
     // Hash token and set to resetPasswordToken field
-    admin.resetPasswordToken = crypto
+    user.resetPasswordToken = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
     
     // Set expire time (10 minutes)
-    admin.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     
-    await admin.save();
+    await user.save();
     
-    // In production, send this via email
-    // For development, return the token
-    res.json({
-      success: true,
-      message: 'Password reset token generated',
-      // REMOVE THIS IN PRODUCTION - only for development
-      resetToken: resetToken,
-      note: 'In production, this token would be sent via email'
-    });
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
+    
+    // Get email template
+    const emailContent = passwordResetTemplate(resetUrl, user.username || user.name);
+    
+    try {
+      // Send email
+      await sendEmail({
+        to: user.email,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      });
+      
+      console.log(`✅ Password reset email sent to: ${user.email}`);
+      
+      res.json({
+        success: true,
+        message: 'Password reset email sent successfully. Please check your inbox.'
+      });
+      
+    } catch (emailError) {
+      // If email fails, remove reset token from database
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      
+      console.error('Email sending failed:', emailError);
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Email could not be sent. Please try again later or contact support.'
+      });
+    }
+    
   } catch (error) {
+    console.error('Forgot password error:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -305,28 +384,53 @@ router.put('/reset-password', async (req, res) => {
       .update(resetToken)
       .digest('hex');
     
-    // Find admin with valid token
-    const admin = await Admin.findOne({
+    // Find user (admin or seller) with valid token
+    let user = await Admin.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() }
     });
     
-    if (!admin) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    if (!user) {
+      user = await Seller.findOne({
+        resetPasswordToken: hashedToken,
+        resetPasswordExpire: { $gt: Date.now() }
+      });
+    }
+    
+    if (!user) {
+      return res.status(400).json({ 
+        message: 'Invalid or expired reset token. Please request a new password reset.' 
+      });
     }
     
     // Set new password
-    admin.password = newPassword;
-    admin.resetPasswordToken = undefined;
-    admin.resetPasswordExpire = undefined;
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
     
-    await admin.save();
+    await user.save();
+    
+    // Optionally send confirmation email
+    try {
+      const emailContent = passwordChangedTemplate(user.username || user.name);
+      await sendEmail({
+        to: user.email,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      });
+      console.log(`✅ Password changed confirmation email sent to: ${user.email}`);
+    } catch (emailError) {
+      console.error('Failed to send confirmation email:', emailError);
+      // Don't fail the request if email fails
+    }
     
     res.json({
       success: true,
       message: 'Password reset successful. You can now login with your new password.'
     });
   } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ message: error.message });
   }
 });

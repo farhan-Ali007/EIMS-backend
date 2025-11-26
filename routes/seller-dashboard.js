@@ -1,11 +1,15 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import { authenticate, authorizeSeller } from '../middleware/auth.js';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import Customer from '../models/Customer.js';
 import Seller from '../models/Seller.js';
 
 const router = express.Router();
+
+// All seller dashboard routes require authenticated seller
+router.use(authenticate, authorizeSeller);
 
 // Get seller's dashboard stats
 router.get('/stats', async (req, res) => {

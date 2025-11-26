@@ -1,11 +1,12 @@
 import express from 'express';
+import { authenticate, authorizeAdmin } from '../middleware/auth.js';
 import PDFDocument from 'pdfkit';
 import Sale from '../models/Sale.js';
 
 const router = express.Router();
 
-// Generate invoice PDF
-router.get('/invoice/:id', async (req, res) => {
+// Generate invoice PDF (admin-only)
+router.get('/invoice/:id', authenticate, authorizeAdmin, async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id)
       .populate('productId sellerId customerId');

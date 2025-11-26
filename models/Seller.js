@@ -7,15 +7,24 @@ const sellerSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
-  },
   phone: {
     type: String,
     trim: true
+  },
+  basicSalary: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  commission: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  total: {
+    type: Number,
+    default: 0,
+    min: 0
   },
   password: {
     type: String,
@@ -26,6 +35,11 @@ const sellerSchema = new mongoose.Schema({
     type: String,
     default: 'seller'
   },
+  commissionRate: {
+    type: Number,
+    default: 5,
+    min: 0
+  },
   totalCommission: {
     type: Number,
     default: 0,
@@ -34,6 +48,12 @@ const sellerSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  resetPasswordToken: {
+    type: String
+  },
+  resetPasswordExpire: {
+    type: Date
   }
 }, {
   timestamps: true
@@ -42,10 +62,19 @@ const sellerSchema = new mongoose.Schema({
 // Hash password before saving
 sellerSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+// Calculate total (basicSalary + commission) before saving
+sellerSchema.pre('save', function(next) {
+  const salary = Number(this.basicSalary || 0);
+  const commission = Number(this.commission || 0);
+  this.total = salary + commission;
+  next();
 });
 
 // Method to compare password

@@ -1,10 +1,14 @@
 import express from 'express';
+import { authenticate, authorizeAdmin } from '../middleware/auth.js';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import Customer from '../models/Customer.js';
 import Seller from '../models/Seller.js';
 
 const router = express.Router();
+
+// Dashboard is restricted to authenticated admins only
+router.use(authenticate, authorizeAdmin);
 
 // Get dashboard statistics
 router.get('/stats', async (req, res) => {
@@ -127,7 +131,25 @@ router.get('/chart-data', async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
-    res.json(salesData);
+    // Create array of last 7 days with 0 values for missing days
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateString = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      
+      // Find existing data for this date
+      const existingData = salesData.find(item => item._id === dateString);
+      
+      last7Days.push({
+        _id: dateString,
+        totalSales: existingData ? existingData.totalSales : 0,
+        count: existingData ? existingData.count : 0,
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      });
+    }
+    
+    res.json(last7Days);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

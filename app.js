@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
 
 // Import routes
@@ -14,12 +16,21 @@ import dashboardRoutes from './routes/dashboard.js';
 import pdfRoutes from './routes/pdf.js';
 import categoryRoutes from './routes/categories.js';
 import sellerDashboardRoutes from './routes/seller-dashboard.js';
+import billRoutes from './routes/bills.js';
+import expenseRoutes from './routes/expenses.js';
+import adminRoutes from './routes/admins.js';
+import returnRoutes from './routes/returns.js';
+import parcelRoutes from './routes/parcels.js';
 
 // Import middleware
 import { authenticate } from './middleware/auth.js';
 
 // Load environment variables
 dotenv.config();
+
+// Resolve __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize Express app
 const app = express();
@@ -58,6 +69,15 @@ app.use('/api/sales', authenticate, saleRoutes);
 app.use('/api/dashboard', authenticate, dashboardRoutes);
 app.use('/api/pdf', authenticate, pdfRoutes);
 app.use('/api/seller-dashboard', authenticate, sellerDashboardRoutes);
+app.use('/api/bills', authenticate, billRoutes);
+app.use('/api/expenses', authenticate, expenseRoutes);
+app.use('/api/admins', authenticate, adminRoutes);
+app.use('/api/returns', authenticate, returnRoutes);
+app.use('/api/parcels', authenticate, parcelRoutes);
+
+// Serve frontend static files from Vite dist folder
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+app.use(express.static(frontendDistPath));
 
 // Root route
 app.get('/', (req, res) => {
@@ -70,7 +90,9 @@ app.get('/', (req, res) => {
       customers: '/api/customers',
       sales: '/api/sales',
       dashboard: '/api/dashboard',
-      pdf: '/api/pdf'
+      pdf: '/api/pdf',
+      bills: '/api/bills',
+      expenses: '/api/expenses'
     }
   });
 });
@@ -80,7 +102,15 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// 404 handler
+// SPA fallback for non-API routes (must come before 404 handler)
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
+
+// 404 handler (for unmatched API routes or other errors)
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });

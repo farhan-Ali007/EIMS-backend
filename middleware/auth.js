@@ -33,8 +33,34 @@ export const authenticate = async (req, res, next) => {
 };
 
 export const authorizeAdmin = (req, res, next) => {
+  if (req.userType !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
+  }
+
   if (req.admin.role !== 'admin' && req.admin.role !== 'superadmin') {
     return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
+  }
+
+  next();
+};
+
+// Allow both admin and manager (and superadmin) for operational routes
+export const authorizeManagerOrAdmin = (req, res, next) => {
+  if (req.userType !== 'admin') {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+
+  if (!['admin', 'superadmin', 'manager'].includes(req.admin.role)) {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+
+  next();
+};
+
+// Restrict to seller users only
+export const authorizeSeller = (req, res, next) => {
+  if (req.userType !== 'seller') {
+    return res.status(403).json({ message: 'Access denied. Seller privileges required.' });
   }
   next();
 };

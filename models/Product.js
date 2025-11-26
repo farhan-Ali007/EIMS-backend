@@ -6,12 +6,32 @@ const productSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  model: {
+    type: String,
+    required: true,
+    trim: true
+  },
   category: {
     type: String,
     required: true,
     trim: true
   },
-  price: {
+  originalPrice: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  wholesalePrice: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  retailPrice: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  websitePrice: {
     type: Number,
     required: true,
     min: 0
@@ -21,16 +41,6 @@ const productSchema = new mongoose.Schema({
     required: true,
     min: 0,
     default: 0
-  },
-  commission: {
-    type: Number,
-    required: true,
-    min: 0,
-    default: 0
-  },
-  lowStockAlert: {
-    type: Number,
-    default: 10
   }
 }, {
   timestamps: true

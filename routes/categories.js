@@ -1,7 +1,11 @@
 import express from 'express';
+import { authenticate, authorizeManagerOrAdmin } from '../middleware/auth.js';
 import Category from '../models/Category.js';
 
 const router = express.Router();
+
+// Category management requires authenticated admin/manager
+router.use(authenticate, authorizeManagerOrAdmin);
 
 // Get all categories
 router.get('/', async (req, res) => {

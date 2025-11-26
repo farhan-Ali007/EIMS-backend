@@ -23,7 +23,7 @@ const adminSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'superadmin'],
+    enum: ['admin', 'superadmin', 'manager'],
     default: 'admin'
   },
   resetPasswordToken: {

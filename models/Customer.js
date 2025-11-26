@@ -11,13 +11,10 @@ const customerSchema = new mongoose.Schema({
     enum: ['online', 'offline'],
     required: true
   },
-  email: {
-    type: String,
-    trim: true
-  },
   phone: {
     type: String,
-    trim: true
+    trim: true,
+    required: true
   },
   address: {
     type: String,

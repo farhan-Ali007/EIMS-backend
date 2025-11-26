@@ -1,4 +1,209 @@
 # 🔧 Inventory Management System - Backend
+## 🔧 Etimad Mart – Backend (Node/Express)
+
+Node.js + Express REST API for the Etimad Mart Inventory & Billing System. Provides authentication, RBAC, and all data endpoints used by the React frontend.
+
+---
+
+## 🧱 Tech Stack
+
+- Node.js
+- Express
+- MongoDB + Mongoose
+- JWT authentication
+- Bcrypt for password hashing
+
+---
+
+## 🚀 Core Features (Backend)
+
+- JWT‑based auth with roles: `superadmin`, `admin`, `manager`, `seller`
+- Role‑based access control middleware
+- Product, seller, customer, sale, bill, expense, return, and admin management
+- Dashboard stats for admin and sellers
+- Billing endpoints with stats and customer history
+- **Returns endpoints** that adjust product stock when a return is recorded
+
+---
+
+## 📁 Project Structure
+
+```text
+backend/
+├── app.js                 # Express app setup & route mounting
+├── config/
+│   └── database.js        # MongoDB connection
+├── controllers/
+│   ├── authController.js
+│   ├── productController.js
+│   ├── sellerController.js
+│   ├── customerController.js
+│   ├── saleController.js
+│   ├── billController.js
+│   ├── expenseController.js
+│   ├── dashboardController.js
+│   ├── returnController.js
+│   └── adminController.js
+├── middleware/
+│   └── auth.js            # authenticate, authorizeManagerOrAdmin, authorizeAdmin, etc.
+├── models/
+│   ├── Admin.js
+│   ├── Seller.js
+│   ├── Customer.js
+│   ├── Product.js
+│   ├── Category.js
+│   ├── Sale.js
+│   ├── Bill.js
+│   ├── Expense.js
+│   ├── StockHistory.js
+│   └── Return.js
+├── routes/
+│   ├── auth.js
+│   ├── products.js
+│   ├── sellers.js
+│   ├── customers.js
+│   ├── sales.js
+│   ├── dashboard.js
+│   ├── seller-dashboard.js
+│   ├── pdf.js
+│   ├── categories.js
+│   ├── bills.js
+│   ├── expenses.js
+│   ├── admins.js
+│   └── returns.js
+└── package.json
+```
+
+`app.js` mounts routes under `/api/*` and applies global middleware (CORS, JSON body parsing, cookie parser, auth where required).
+
+---
+
+## 🔐 Auth & Roles
+
+- **Auth flow**
+  - `/api/auth/login` issues JWT
+  - `authenticate` middleware validates token
+  - Role helpers (`authorizeManagerOrAdmin`, `authorizeAdmin`, etc.) restrict access
+
+- **Role examples**
+  - Products routes: `authenticate` + `authorizeManagerOrAdmin`
+    - Delete: additionally wrapped with `authorizeAdmin` so managers cannot delete products
+  - Returns routes: `authenticate` + `authorizeManagerOrAdmin`
+
+---
+
+## 🌐 Main API Endpoints (Summary)
+
+Base URL: `http://localhost:4000/api`
+
+- **Auth** – `/auth`
+  - `POST /login`, `POST /logout`, `GET /me`, `POST /forgot-password`, `PUT /reset-password/:token`, `PUT /change-password`
+
+- **Products** – `/products`
+  - `GET /` – list products
+  - `GET /low-stock` – low‑stock list
+  - `GET /:id` – product details
+  - `POST /` – create product
+  - `PUT /:id` – update product
+  - `DELETE /:id` – delete product (**admin only**)
+  - `GET /:id/stock-history` – stock movements
+  - `POST /:id/add-stock` – add stock and record history
+
+- **Sellers** – `/sellers`
+  - CRUD + leaderboard and dashboard helpers
+
+- **Customers** – `/customers`
+  - CRUD for customers
+
+- **Sales** – `/sales`
+  - Sales records (if used by reporting)
+
+- **Bills / Billing** – `/bills`
+  - `GET /` – paginated bill list with filters (used by Billing History)
+  - `GET /:id` – single bill
+  - `POST /` – create bill
+  - `PATCH /:id/status` – update status
+  - `DELETE /:id` – delete
+  - `GET /customer/:id/history` – customer billing history / remaining
+  - `GET /stats/overview` – billing stats
+
+- **Expenses** – `/expenses`
+  - `GET /` – list (with date filters)
+  - `POST /` – create expense
+  - `GET /stats/overview` – expense stats
+
+- **Returns** – `/returns`
+  - `GET /` – list returns (with optional search)
+  - `POST /` – create return and **increment product stock**
+
+- **Admins** – `/admins`
+  - `GET /` – list admins
+  - `PUT /:id/role` – change admin role
+
+- **Dashboard** – `/dashboard`
+  - Overall stats and chart data for admin dashboard
+
+- **Seller Dashboard** – `/seller-dashboard`
+  - Stats and recent sales for logged‑in seller
+
+---
+
+## 🔁 Returns Logic (Important)
+
+When `POST /api/returns` is called:
+
+1. Payload includes `productId`, `quantity`, `unitPrice`, `trackingId`, optional `notes`, and `customerName`.
+2. Controller validates data and finds the product.
+3. Product `stock` is increased by `quantity` and saved.
+4. A `Return` document is created linking product, quantity, unitPrice, trackingId, notes, customerName, and `createdBy`.
+
+This is what powers the frontend Returns page and ensures stock stays consistent.
+
+---
+
+## ⚙️ Setup & Run (Backend Only)
+
+### 1. Install
+
+```bash
+cd backend
+npm install
+```
+
+### 2. Environment
+
+Create `backend/.env` (example):
+
+```env
+PORT=4000
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27017/inventory-management
+JWT_SECRET=change_me
+JWT_EXPIRE=7d
+FRONTEND_URL=http://localhost:5173
+```
+
+Add email configuration here if you use password reset via email.
+
+### 3. Run
+
+```bash
+npm run dev   # nodemon, if configured
+# or
+npm start
+```
+
+API will be available at `http://localhost:4000/api`.
+
+---
+
+## 🧩 Notes
+
+- CORS is configured in `app.js` using `FRONTEND_URL`.
+- Many routes are wrapped in `authenticate` and role‑checking middlewares.
+- Product delete and certain admin actions are double‑protected (backend + frontend).
+- Returns endpoint is idempotent per request; if called twice for the same real‑world return, stock will increase twice.
+
 
 Modern REST API built with Node.js, Express, and MongoDB for managing inventory, sales, sellers, and customers.
 
@@ -10,8 +215,9 @@ Modern REST API built with Node.js, Express, and MongoDB for managing inventory,
 - JWT-based authentication
 - Role-based access control (Admin/Seller)
 - Password hashing with bcrypt
-- Secure password reset system
+- Secure password reset system with email
 - Session management
+- Nodemailer email integration
 
 ### **Core Modules**
 - 📦 **Product Management** - CRUD operations, stock tracking, low stock alerts
@@ -66,13 +272,15 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRE=7d
 
 # Email Configuration (for password reset)
+# See EMAIL_SETUP_GUIDE.md for detailed setup instructions
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=your-email-app-password
-EMAIL_FROM=noreply@yourdomain.com
+EMAIL_PASSWORD=your-app-password-here
+EMAIL_FROM=your-email@gmail.com
+EMAIL_FROM_NAME=Inventory Management System
 
-# Frontend URL (for CORS)
+# Frontend URL (for CORS and email links)
 FRONTEND_URL=http://localhost:5173
 ```
 
