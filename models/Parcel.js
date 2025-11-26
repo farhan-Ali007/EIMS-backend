@@ -7,6 +7,11 @@ const parcelSchema = new mongoose.Schema(
       ref: 'Product',
       required: true
     },
+    customerName: {
+      type: String,
+      required: true,
+      trim: true
+    },
     trackingNumber: {
       type: String,
       required: true,

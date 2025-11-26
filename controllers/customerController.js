@@ -11,7 +11,7 @@ export const getCustomers = async (req, res) => {
   }
 };
 
-// Get single customer with purchase history
+// Get single customer with purchase historys
 export const getCustomerById = async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id);
