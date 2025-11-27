@@ -36,8 +36,14 @@ export const getProductById = async (req, res) => {
 
 // Create product
 export const createProduct = async (req, res) => {
-  const product = new Product(req.body);
   try {
+    // Prevent duplicate model entries
+    const existing = await Product.findOne({ model: req.body.model });
+    if (existing) {
+      return res.status(400).json({ message: 'A product with this model already exists' });
+    }
+
+    const product = new Product(req.body);
     const newProduct = await product.save();
 
     // Create initial stock history entry
