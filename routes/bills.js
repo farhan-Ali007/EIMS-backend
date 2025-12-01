@@ -7,7 +7,8 @@ import {
   getCustomerHistory,
   getBillingStats,
   updateBillStatus,
-  cancelBill
+  cancelBill,
+  addBillPayment,
 } from '../controllers/billController.js';
 
 const router = express.Router();
@@ -22,5 +23,6 @@ router.get('/:id', getBillById);
 router.post('/', createBill);
 router.patch('/:id/status', updateBillStatus);
 router.delete('/:id', cancelBill);
+router.post('/:id/payments', addBillPayment);
 
 export default router;

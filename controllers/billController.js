@@ -4,6 +4,7 @@ import Customer from '../models/Customer.js';
 import Admin from '../models/Admin.js';
 import Seller from '../models/Seller.js';
 import Sale from '../models/Sale.js';
+import Income from '../models/Income.js';
 
 // Get all bills with pagination and filters
 export const getBills = async (req, res) => {
@@ -139,6 +140,26 @@ export const createBill = async (req, res) => {
       notes
     });
     await bill.save();
+
+    // Record initial bill as income entry if applicable
+    // expectedAmount represents how much they should pay for this bill,
+    // amount represents how much was actually paid at bill creation (can be 0)
+    if (embeddedCustomer) {
+      try {
+        const income = new Income({
+          type: 'cash',
+          expectedAmount: numericTotal,
+          amount: numericAmountPaid,
+          from: embeddedCustomer.name,
+          date: new Date(),
+          createdBy: req.user.id,
+        });
+        await income.save();
+      } catch (incomeError) {
+        console.error('Error creating income for initial bill payment:', incomeError);
+        // Do not fail bill creation if income creation fails
+      }
+    }
 
     // Update product stock
     for (const item of items) {
@@ -365,6 +386,61 @@ export const cancelBill = async (req, res) => {
     res.json({ message: 'Bill cancelled successfully' });
   } catch (error) {
     console.error('Error cancelling bill:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Add payment to an existing bill and create matching income entry
+export const addBillPayment = async (req, res) => {
+  try {
+    const { amount, note } = req.body;
+
+    const paidNow = Number(amount || 0);
+    if (!paidNow || paidNow <= 0) {
+      return res.status(400).json({ message: 'Payment amount must be greater than 0' });
+    }
+
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    const currentPaid = Number(bill.amountPaid || 0);
+    const currentRemaining = Number(bill.remainingAmount || 0);
+
+    const newAmountPaid = currentPaid + paidNow;
+    const newRemaining = currentRemaining - paidNow;
+
+    bill.amountPaid = newAmountPaid;
+    bill.remainingAmount = newRemaining < 0 ? 0 : newRemaining;
+
+    await bill.save();
+
+    // Create an income record for this payment if customer info is available
+    if (bill.customer && bill.customer.name) {
+      try {
+        const income = new Income({
+          type: 'cash',
+          expectedAmount: 0,
+          amount: paidNow,
+          from: bill.customer.name,
+          date: new Date(),
+          createdBy: req.user.id,
+        });
+        await income.save();
+      } catch (incomeError) {
+        console.error('Error creating income for bill payment:', incomeError);
+        // Do not fail the whole request if income creation fails
+      }
+    }
+
+    const populatedBill = await Bill.findById(bill._id)
+      .populate('createdBy', 'username email')
+      .populate('items.productId', 'name model category');
+
+    res.json(populatedBill);
+  } catch (error) {
+    console.error('Error adding bill payment:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
