@@ -25,7 +25,6 @@ const customerSchema = new mongoose.Schema({
   },
   price:{
     type: Number,
-    required: true
   },
   phone: {
     type: String,
