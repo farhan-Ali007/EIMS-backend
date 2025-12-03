@@ -11,8 +11,21 @@ const customerSchema = new mongoose.Schema({
     enum: ['online', 'offline'],
     required: true
   },
+  price: {
+    type: Number,
+    required: true,
+    min: 0
+  },
   product: {
     type: String
+  },
+  seller: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Seller',
+  },
+  price:{
+    type: Number,
+    required: true
   },
   phone: {
     type: String,

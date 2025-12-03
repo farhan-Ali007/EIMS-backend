@@ -4,7 +4,9 @@ import Sale from '../models/Sale.js';
 // Get all customers
 export const getCustomers = async (req, res) => {
   try {
-    const customers = await Customer.find().sort({ createdAt: -1 });
+    const customers = await Customer.find()
+      .populate('seller', 'name')
+      .sort({ createdAt: -1 });
     res.json(customers);
   } catch (error) {
     res.status(500).json({ message: error.message });
