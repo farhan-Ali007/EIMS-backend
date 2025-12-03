@@ -11,6 +11,9 @@ const customerSchema = new mongoose.Schema({
     enum: ['online', 'offline'],
     required: true
   },
+  product: {
+    type: String
+  },
   phone: {
     type: String,
     trim: true

@@ -22,6 +22,7 @@ import incomeRoutes from './routes/incomes.js';
 import adminRoutes from './routes/admins.js';
 import returnRoutes from './routes/returns.js';
 import parcelRoutes from './routes/parcels.js';
+import bookPORoutes from './routes/book-po.js';
 
 // Import middleware
 import { authenticate } from './middleware/auth.js';
@@ -76,6 +77,7 @@ app.use('/api/incomes', authenticate, incomeRoutes);
 app.use('/api/admins', authenticate, adminRoutes);
 app.use('/api/returns', authenticate, returnRoutes);
 app.use('/api/parcels', authenticate, parcelRoutes);
+app.use('/api/book-po', authenticate, bookPORoutes);
 
 // Serve frontend static files from Vite dist folder
 const frontendDistPath = path.join(__dirname, '../frontend/dist');

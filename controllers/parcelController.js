@@ -5,6 +5,9 @@ import Product from '../models/Product.js';
 export const getParcels = async (req, res) => {
   try {
     const { tracking, status, paymentStatus } = req.query;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
+
     const filter = {};
 
     if (tracking) {
@@ -17,12 +20,25 @@ export const getParcels = async (req, res) => {
       filter.paymentStatus = paymentStatus;
     }
 
-    const parcels = await Parcel.find(filter)
-      .populate('product', 'name model category')
-      .populate('createdBy', 'username email')
-      .sort({ createdAt: -1 });
+    const [total, parcels] = await Promise.all([
+      Parcel.countDocuments(filter),
+      Parcel.find(filter)
+        .populate('product', 'name model category')
+        .populate('createdBy', 'username email')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+    ]);
 
-    res.json(parcels);
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+
+    res.json({
+      data: parcels,
+      total,
+      page,
+      totalPages,
+      limit,
+    });
   } catch (error) {
     console.error('Error fetching parcels:', error);
     res.status(500).json({ message: 'Failed to fetch parcels' });
@@ -69,5 +85,34 @@ export const createParcel = async (req, res) => {
   } catch (error) {
     console.error('Error creating parcel:', error);
     res.status(500).json({ message: 'Failed to create parcel' });
+  }
+};
+
+// Update parcel status / payment / notes
+export const updateParcelStatus = async (req, res) => {
+  try {
+    const { status, paymentStatus, notes } = req.body;
+
+    const update = {};
+    if (status) update.status = status;
+    if (paymentStatus) update.paymentStatus = paymentStatus;
+    if (typeof notes === 'string') update.notes = notes;
+
+    const parcel = await Parcel.findByIdAndUpdate(
+      req.params.id,
+      update,
+      { new: true, runValidators: true }
+    )
+      .populate('product', 'name model category')
+      .populate('createdBy', 'username email');
+
+    if (!parcel) {
+      return res.status(404).json({ message: 'Parcel not found' });
+    }
+
+    res.json(parcel);
+  } catch (error) {
+    console.error('Error updating parcel status:', error);
+    res.status(500).json({ message: 'Failed to update parcel status' });
   }
 };

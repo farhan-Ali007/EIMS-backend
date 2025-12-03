@@ -223,6 +223,102 @@ export const createBill = async (req, res) => {
   }
 };
 
+// Update existing bill and recalculate stock based on item differences
+export const updateBill = async (req, res) => {
+  try {
+    const billId = req.params.id;
+    const { customer, items, subtotal, discount, discountType, total, amountPaid, previousRemaining, paymentMethod, notes } = req.body;
+
+    const existingBill = await Bill.findById(billId);
+    if (!existingBill) {
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+
+    // Build quantity maps for old and new items
+    const oldQuantities = {};
+    for (const item of existingBill.items) {
+      const key = String(item.productId);
+      oldQuantities[key] = (oldQuantities[key] || 0) + Number(item.quantity || 0);
+    }
+
+    const newQuantities = {};
+    for (const item of items) {
+      const key = String(item.productId);
+      newQuantities[key] = (newQuantities[key] || 0) + Number(item.quantity || 0);
+    }
+
+    // Validate stock for new quantities, considering we are reverting old consumption
+    const productIds = Array.from(new Set([...Object.keys(oldQuantities), ...Object.keys(newQuantities)]));
+
+    for (const productId of productIds) {
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(400).json({ message: `Product with ID ${productId} not found` });
+      }
+
+      const oldQty = oldQuantities[productId] || 0;
+      const newQty = newQuantities[productId] || 0;
+
+      // Effective available stock if we add back the old quantity first
+      const effectiveStock = Number(product.stock || 0) + oldQty;
+      if (effectiveStock < newQty) {
+        return res.status(400).json({
+          message: `Insufficient stock for product ${product.name}. Available: ${effectiveStock}, Requested: ${newQty}`
+        });
+      }
+    }
+
+    // Apply stock changes: revert old items, apply new ones via a single delta per product
+    for (const productId of productIds) {
+      const oldQty = oldQuantities[productId] || 0;
+      const newQty = newQuantities[productId] || 0;
+      const delta = oldQty - newQty; // positive -> increase stock, negative -> decrease further
+
+      if (delta !== 0) {
+        await Product.findByIdAndUpdate(productId, { $inc: { stock: delta } });
+      }
+    }
+
+    const embeddedCustomer = customer ? {
+      id: customer.id || customer._id || customer.customerId,
+      name: customer.name,
+      type: customer.type,
+      phone: customer.phone,
+      address: customer.address
+    } : null;
+
+    const numericTotal = Number(total) || 0;
+    const numericAmountPaid = Number(amountPaid ?? 0);
+    const prevRemaining = Number(previousRemaining ?? 0);
+    const globalRemaining = prevRemaining + numericTotal - numericAmountPaid;
+
+    existingBill.customer = embeddedCustomer;
+    existingBill.items = items.map(item => ({
+      ...item,
+      totalAmount: item.selectedPrice * item.quantity
+    }));
+    existingBill.subtotal = subtotal;
+    existingBill.discount = discount || 0;
+    existingBill.discountType = discountType || 'percentage';
+    existingBill.total = numericTotal;
+    existingBill.amountPaid = numericAmountPaid;
+    existingBill.remainingAmount = globalRemaining < 0 ? 0 : globalRemaining;
+    existingBill.paymentMethod = paymentMethod || existingBill.paymentMethod || 'cash';
+    existingBill.notes = notes;
+
+    await existingBill.save();
+
+    const populatedBill = await Bill.findById(existingBill._id)
+      .populate('createdBy', 'username email')
+      .populate('items.productId', 'name model category');
+
+    res.json(populatedBill);
+  } catch (error) {
+    console.error('Error updating bill:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 // Get customer purchase history
 export const getCustomerHistory = async (req, res) => {
   try {
@@ -363,18 +459,16 @@ export const updateBillStatus = async (req, res) => {
 // Delete bill (soft delete by changing status)
 export const cancelBill = async (req, res) => {
   try {
-    const bill = await Bill.findByIdAndUpdate(
-      req.params.id,
-      { status: 'cancelled' },
-      { new: true }
-    );
+    const bill = await Bill.findById(req.params.id);
 
     if (!bill) {
       return res.status(404).json({ message: 'Bill not found' });
     }
 
-    // Restore product stock if bill was completed
-    if (bill.status === 'completed') {
+    const previousStatus = bill.status;
+
+    // Restore product stock only if this bill was previously completed
+    if (previousStatus === 'completed') {
       for (const item of bill.items) {
         await Product.findByIdAndUpdate(
           item.productId,
@@ -382,6 +476,9 @@ export const cancelBill = async (req, res) => {
         );
       }
     }
+
+    bill.status = 'cancelled';
+    await bill.save();
 
     res.json({ message: 'Bill cancelled successfully' });
   } catch (error) {

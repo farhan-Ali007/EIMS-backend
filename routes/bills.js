@@ -4,6 +4,7 @@ import {
   getBills,
   getBillById,
   createBill,
+  updateBill,
   getCustomerHistory,
   getBillingStats,
   updateBillStatus,
@@ -21,6 +22,7 @@ router.get('/stats/overview', getBillingStats);
 router.get('/customer/:customerId/history', getCustomerHistory);
 router.get('/:id', getBillById);
 router.post('/', createBill);
+router.put('/:id', updateBill);
 router.patch('/:id/status', updateBillStatus);
 router.delete('/:id', cancelBill);
 router.post('/:id/payments', addBillPayment);
