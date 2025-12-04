@@ -11,11 +11,6 @@ const customerSchema = new mongoose.Schema({
     enum: ['online', 'offline'],
     required: true
   },
-  price: {
-    type: Number,
-    required: true,
-    min: 0
-  },
   product: {
     type: String
   },
@@ -25,6 +20,7 @@ const customerSchema = new mongoose.Schema({
   },
   price:{
     type: Number,
+    min: 0
   },
   phone: {
     type: String,
