@@ -5,7 +5,9 @@ import {
   getCustomerById,
   createCustomer,
   updateCustomer,
-  deleteCustomer
+  deleteCustomer,
+  backfillOnlineCustomerCommissions,
+  previewOnlineCustomerCommissions
 } from '../controllers/customerController.js';
 
 const router = express.Router();
@@ -19,5 +21,9 @@ router.post('/', createCustomer);
 router.put('/:id', updateCustomer);
 // Only admins/superadmins can delete customers
 router.delete('/:id', authorizeAdmin, deleteCustomer);
+
+// One-time backfill endpoint for online customer commissions (admin only)
+router.post('/backfill-online-commissions', authorizeAdmin, backfillOnlineCustomerCommissions);
+router.get('/backfill-online-commissions/preview', authorizeAdmin, previewOnlineCustomerCommissions);
 
 export default router;
