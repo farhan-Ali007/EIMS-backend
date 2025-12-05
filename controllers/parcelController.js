@@ -48,7 +48,7 @@ export const getParcels = async (req, res) => {
 // Create new parcel
 export const createParcel = async (req, res) => {
   try {
-    const { productId, customerName, trackingNumber, address, status, paymentStatus, notes } = req.body;
+    const { productId, customerName, trackingNumber, address, status, paymentStatus, notes, codAmount, parcelDate } = req.body;
 
     if (!productId || !customerName || !trackingNumber || !address) {
       return res
@@ -66,11 +66,15 @@ export const createParcel = async (req, res) => {
       return res.status(400).json({ message: 'A parcel with this tracking number already exists' });
     }
 
+    const numericCodAmount = Number(codAmount || 0);
+
     const parcel = await Parcel.create({
       product: productId,
       customerName: customerName.trim(),
       trackingNumber,
       address,
+      codAmount: Number.isNaN(numericCodAmount) ? 0 : numericCodAmount,
+      parcelDate: parcelDate ? new Date(parcelDate) : new Date(),
       status: status || 'processing',
       paymentStatus: paymentStatus || 'unpaid',
       notes: notes || '',

@@ -23,6 +23,14 @@ const parcelSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    codAmount: {
+      type: Number,
+      default: 0
+    },
+    parcelDate: {
+      type: Date,
+      default: Date.now
+    },
     status: {
       type: String,
       enum: ['processing', 'delivered', 'return'],
