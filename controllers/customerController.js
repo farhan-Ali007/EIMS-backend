@@ -1,6 +1,7 @@
 import Customer from '../models/Customer.js';
 import Sale from '../models/Sale.js';
 import Seller from '../models/Seller.js';
+import Product from '../models/Product.js';
 
 // Get all customers
 export const getCustomers = async (req, res) => {
@@ -109,6 +110,38 @@ export const createCustomer = async (req, res) => {
   try {
     const newCustomer = await customer.save();
 
+    // If this is a new online customer with a product, also decrement matching product stock by 1.
+    // We match by product name (Customer.product is a free-text field) and only log errors so
+    // stock issues do not block customer creation.
+    if (newCustomer.type === 'online' && newCustomer.product) {
+      try {
+        // Find a product whose name matches the customer's product string
+        const productDoc = await Product.findOne({ name: newCustomer.product });
+
+        if (productDoc) {
+          const quantityToDeduct = 1;
+
+          const updatedProduct = await Product.findOneAndUpdate(
+            { _id: productDoc._id, stock: { $gte: quantityToDeduct } },
+            { $inc: { stock: -quantityToDeduct } },
+            { new: true }
+          );
+
+          if (!updatedProduct) {
+            console.warn(
+              `Could not decrement stock for product ${productDoc._id}: not enough stock.`
+            );
+          }
+        } else {
+          console.warn(
+            `No Product document found matching customer.product="${newCustomer.product}"`
+          );
+        }
+      } catch (stockError) {
+        console.error('Error updating product stock for online customer:', stockError);
+      }
+    }
+
     // If this is a new online customer with a product and a referred seller,
     // add commission for the seller (quantity assumed as 1) and create a commission history entry.
     if (newCustomer.type === 'online' && newCustomer.product && newCustomer.seller) {
@@ -157,15 +190,55 @@ export const createCustomer = async (req, res) => {
 // Update customer
 export const updateCustomer = async (req, res) => {
   try {
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    if (!customer) {
+    const existingCustomer = await Customer.findById(req.params.id);
+    if (!existingCustomer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
-    res.json(customer);
+
+    // Preserve previous state before applying updates
+    const prevType = existingCustomer.type;
+    const prevProduct = existingCustomer.product;
+
+    // Apply updates on the existing instance so we can compare before/after
+    Object.assign(existingCustomer, req.body);
+    const updatedCustomer = await existingCustomer.save();
+
+    // If after update this is an online customer with a product, and previously
+    // it was not the same (type/product), decrement product stock by 1.
+    const wasOnlineWithProduct =
+      prevType === 'online' && !!prevProduct;
+    const isOnlineWithProduct =
+      updatedCustomer.type === 'online' && !!updatedCustomer.product;
+
+    if (isOnlineWithProduct && (!wasOnlineWithProduct || prevProduct !== updatedCustomer.product)) {
+      try {
+        const productDoc = await Product.findOne({ name: updatedCustomer.product });
+
+        if (productDoc) {
+          const quantityToDeduct = 1;
+
+          const updatedProduct = await Product.findOneAndUpdate(
+            { _id: productDoc._id, stock: { $gte: quantityToDeduct } },
+            { $inc: { stock: -quantityToDeduct } },
+            { new: true }
+          );
+
+          if (!updatedProduct) {
+            console.warn(
+              `Could not decrement stock for product ${productDoc._id} on customer update: not enough stock.`
+            );
+          }
+        } else {
+          console.warn(
+            `No Product document found matching updated customer.product="${updatedCustomer.product}"`
+          );
+        }
+      } catch (stockError) {
+        console.error('Error updating product stock for online customer (update):', stockError);
+      }
+    }
+
+    res.json(updatedCustomer);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

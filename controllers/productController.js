@@ -11,10 +11,10 @@ export const getProducts = async (req, res) => {
   }
 };
 
-// Get low stock products (stock <= 10)
+// Get low stock products (stock <= 1)
 export const getLowStockProducts = async (req, res) => {
   try {
-    const products = await Product.find({ stock: { $lte: 10 } });
+    const products = await Product.find({ stock: { $lte: 1 } });
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: error.message });
