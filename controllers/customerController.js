@@ -255,6 +255,12 @@ export const updateCustomer = async (req, res) => {
       ? req.body.productId
       : undefined;
 
+    // If productId is provided, treat it as authoritative and do not allow
+    // any incoming product name string to override the resolved Product.
+    if (incomingProductId !== undefined && Object.prototype.hasOwnProperty.call(req.body, 'product')) {
+      delete req.body.product;
+    }
+
     // Prevent accidental persistence of unsupported top-level fields
     if (Object.prototype.hasOwnProperty.call(req.body, 'productId')) {
       delete req.body.productId;
@@ -276,6 +282,9 @@ export const updateCustomer = async (req, res) => {
               model: productDoc.model,
             };
             existingCustomer.product = productDoc.name;
+
+            // Keep legacy product string in sync for downstream consumers
+            req.body.product = productDoc.name;
           }
         } catch (lookupError) {
           console.error('Error resolving product by productId for customer update:', lookupError);
@@ -286,7 +295,10 @@ export const updateCustomer = async (req, res) => {
     // If a product string is provided in the update:
     // - when non-empty, resolve it to a Product and update structured productInfo.
     // - when empty string or null, clear product and productInfo.
-    if (Object.prototype.hasOwnProperty.call(req.body, 'product')) {
+    if (
+      incomingProductId === undefined &&
+      Object.prototype.hasOwnProperty.call(req.body, 'product')
+    ) {
       const incomingProduct = req.body.product;
 
       if (!incomingProduct) {
