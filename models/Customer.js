@@ -14,6 +14,18 @@ const customerSchema = new mongoose.Schema({
   product: {
     type: String
   },
+  productInfo: {
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product'
+    },
+    name: {
+      type: String
+    },
+    model: {
+      type: String
+    }
+  },
   seller: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Seller',

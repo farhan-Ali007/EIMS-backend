@@ -108,15 +108,42 @@ export const getCustomerById = async (req, res) => {
 export const createCustomer = async (req, res) => {
   const customer = new Customer(req.body);
   try {
+    // If a product string is provided, attempt to resolve it to a Product and
+    // store structured info on the customer (productInfo) before saving.
+    if (customer.product) {
+      try {
+        const productDoc = await Product.findOne({ name: customer.product });
+        if (productDoc) {
+          customer.productInfo = {
+            productId: productDoc._id,
+            name: productDoc.name,
+            model: productDoc.model,
+          };
+        }
+      } catch (lookupError) {
+        console.error('Error resolving product for customer.product:', lookupError);
+      }
+    }
+
     const newCustomer = await customer.save();
 
     // If this is a new online customer with a product, also decrement matching product stock by 1.
-    // We match by product name (Customer.product is a free-text field) and only log errors so
+    // Prefer the structured productInfo.productId if available; otherwise
+    // fall back to matching by product name string. Only log errors so
     // stock issues do not block customer creation.
     if (newCustomer.type === 'online' && newCustomer.product) {
       try {
-        // Find a product whose name matches the customer's product string
-        const productDoc = await Product.findOne({ name: newCustomer.product });
+        let productDoc = null;
+
+        // Prefer lookup by productInfo.productId when present
+        if (newCustomer.productInfo?.productId) {
+          productDoc = await Product.findById(newCustomer.productInfo.productId);
+        }
+
+        // Fallback: find by name string
+        if (!productDoc) {
+          productDoc = await Product.findOne({ name: newCustomer.product });
+        }
 
         if (productDoc) {
           const quantityToDeduct = 1;
@@ -199,43 +226,117 @@ export const updateCustomer = async (req, res) => {
     const prevType = existingCustomer.type;
     const prevProduct = existingCustomer.product;
 
-    // Apply updates on the existing instance so we can compare before/after
+    // If a product string is provided in the update:
+    // - when non-empty, resolve it to a Product and update structured productInfo.
+    // - when empty string or null, clear product and productInfo.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'product')) {
+      const incomingProduct = req.body.product;
+
+      if (!incomingProduct) {
+        // Explicitly clearing product
+        existingCustomer.product = '';
+        existingCustomer.productInfo = undefined;
+      } else {
+        try {
+          const productDoc = await Product.findOne({ name: incomingProduct });
+          if (productDoc) {
+            existingCustomer.productInfo = {
+              productId: productDoc._id,
+              name: productDoc.name,
+              model: productDoc.model,
+            };
+            existingCustomer.product = productDoc.name;
+          } else {
+            // If we can't resolve it, still store the string and clear structured info
+            existingCustomer.product = incomingProduct;
+            existingCustomer.productInfo = undefined;
+          }
+        } catch (lookupError) {
+          console.error('Error resolving product for customer update:', lookupError);
+        }
+      }
+    }
+
+    // Apply remaining updates on the existing instance so we can compare before/after
     Object.assign(existingCustomer, req.body);
     const updatedCustomer = await existingCustomer.save();
 
-    // If after update this is an online customer with a product, and previously
-    // it was not the same (type/product), decrement product stock by 1.
-    const wasOnlineWithProduct =
-      prevType === 'online' && !!prevProduct;
-    const isOnlineWithProduct =
+    // Decide stock adjustments based on before/after states
+    const prevOnlineWithProduct = prevType === 'online' && !!prevProduct;
+    const newOnlineWithProduct =
       updatedCustomer.type === 'online' && !!updatedCustomer.product;
 
-    if (isOnlineWithProduct && (!wasOnlineWithProduct || prevProduct !== updatedCustomer.product)) {
-      try {
-        const productDoc = await Product.findOne({ name: updatedCustomer.product });
+    // Helper to resolve a product from a snapshot (type + productInfo + product string)
+    const resolveProductFromSnapshot = async (type, productInfo, productStr) => {
+      if (type !== 'online' || !productStr) return null;
 
-        if (productDoc) {
-          const quantityToDeduct = 1;
+      if (productInfo?.productId) {
+        const byId = await Product.findById(productInfo.productId);
+        if (byId) return byId;
+      }
+      return Product.findOne({ name: productStr });
+    };
 
-          const updatedProduct = await Product.findOneAndUpdate(
-            { _id: productDoc._id, stock: { $gte: quantityToDeduct } },
-            { $inc: { stock: -quantityToDeduct } },
-            { new: true }
-          );
+    try {
+      const prevProductDoc = prevOnlineWithProduct
+        ? await resolveProductFromSnapshot(prevType, existingCustomer.productInfo, prevProduct)
+        : null;
+      const newProductDoc = newOnlineWithProduct
+        ? await resolveProductFromSnapshot(
+            updatedCustomer.type,
+            updatedCustomer.productInfo,
+            updatedCustomer.product
+          )
+        : null;
 
-          if (!updatedProduct) {
-            console.warn(
-              `Could not decrement stock for product ${productDoc._id} on customer update: not enough stock.`
-            );
-          }
-        } else {
+      // Case 1: previously no product, now has product -> decrement new product stock
+      if (!prevOnlineWithProduct && newOnlineWithProduct && newProductDoc) {
+        const quantity = 1;
+        const updated = await Product.findOneAndUpdate(
+          { _id: newProductDoc._id, stock: { $gte: quantity } },
+          { $inc: { stock: -quantity } },
+          { new: true }
+        );
+        if (!updated) {
           console.warn(
-            `No Product document found matching updated customer.product="${updatedCustomer.product}"`
+            `Could not decrement stock for product ${newProductDoc._id} on customer update: not enough stock.`
           );
         }
-      } catch (stockError) {
-        console.error('Error updating product stock for online customer (update):', stockError);
       }
+
+      // Case 2: previously had product, now none -> increment previous product stock
+      if (prevOnlineWithProduct && !newOnlineWithProduct && prevProductDoc) {
+        const quantity = 1;
+        await Product.findByIdAndUpdate(prevProductDoc._id, {
+          $inc: { stock: quantity },
+        });
+      }
+
+      // Case 3: had product A, now has product B
+      if (prevOnlineWithProduct && newOnlineWithProduct && prevProductDoc && newProductDoc) {
+        const sameProduct = String(prevProductDoc._id) === String(newProductDoc._id);
+        if (!sameProduct) {
+          const quantity = 1;
+          // Return stock to previous product
+          await Product.findByIdAndUpdate(prevProductDoc._id, {
+            $inc: { stock: quantity },
+          });
+
+          // Deduct stock from new product
+          const updated = await Product.findOneAndUpdate(
+            { _id: newProductDoc._id, stock: { $gte: quantity } },
+            { $inc: { stock: -quantity } },
+            { new: true }
+          );
+          if (!updated) {
+            console.warn(
+              `Could not decrement stock for new product ${newProductDoc._id} on customer update: not enough stock.`
+            );
+          }
+        }
+      }
+    } catch (stockError) {
+      console.error('Error adjusting product stock for online customer (update):', stockError);
     }
 
     res.json(updatedCustomer);
@@ -247,10 +348,35 @@ export const updateCustomer = async (req, res) => {
 // Delete customer
 export const deleteCustomer = async (req, res) => {
   try {
-    const customer = await Customer.findByIdAndDelete(req.params.id);
+    const customer = await Customer.findById(req.params.id);
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
+
+    // If this was an online customer with an associated product, return 1 unit
+    // of stock to that product before deleting the customer.
+    if (customer.type === 'online' && customer.product) {
+      try {
+        let productDoc = null;
+
+        if (customer.productInfo?.productId) {
+          productDoc = await Product.findById(customer.productInfo.productId);
+        }
+
+        if (!productDoc) {
+          productDoc = await Product.findOne({ name: customer.product });
+        }
+
+        if (productDoc) {
+          await Product.findByIdAndUpdate(productDoc._id, { $inc: { stock: 1 } });
+        }
+      } catch (stockError) {
+        console.error('Error restoring product stock when deleting customer:', stockError);
+        // Do not block customer deletion if stock adjustment fails
+      }
+    }
+
+    await Customer.findByIdAndDelete(req.params.id);
     res.json({ message: 'Customer deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

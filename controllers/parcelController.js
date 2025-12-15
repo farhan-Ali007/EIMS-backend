@@ -81,6 +81,25 @@ export const createParcel = async (req, res) => {
       createdBy: req.admin._id,
     });
 
+    // After creating the parcel, decrement product stock by 1 if possible.
+    try {
+      const quantityToDeduct = 1;
+      const updatedProduct = await Product.findOneAndUpdate(
+        { _id: productId, stock: { $gte: quantityToDeduct } },
+        { $inc: { stock: -quantityToDeduct } },
+        { new: true }
+      );
+
+      if (!updatedProduct) {
+        console.warn(
+          `Could not decrement stock for product ${productId} when creating parcel: not enough stock or product missing.`
+        );
+      }
+    } catch (stockError) {
+      console.error('Error updating product stock when creating parcel:', stockError);
+      // Do not block parcel creation if stock adjustment fails
+    }
+
     const populatedParcel = await Parcel.findById(parcel._id)
       .populate('product', 'name model category')
       .populate('createdBy', 'username email');

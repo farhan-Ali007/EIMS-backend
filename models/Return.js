@@ -14,7 +14,6 @@ const returnSchema = new mongoose.Schema(
     },
     unitPrice: {
       type: Number,
-      required: true,
       min: 0
     },
     customerName: {

@@ -36,7 +36,6 @@ export const createIncome = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
-
 // Get incomes with optional filters
 export const getIncomes = async (req, res) => {
   try {

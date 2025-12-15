@@ -6,12 +6,15 @@ export const createReturn = async (req, res) => {
   try {
     const { productId, quantity, unitPrice, trackingId, notes, customerName } = req.body;
 
-    if (!productId || !quantity || !unitPrice || !trackingId) {
-      return res.status(400).json({ message: 'productId, quantity, unitPrice, and trackingId are required' });
+    // Only productId, quantity, and trackingId are required. unitPrice is optional.
+    if (!productId || !quantity || !trackingId) {
+      return res.status(400).json({ message: 'productId, quantity, and trackingId are required' });
     }
 
     const qty = Number(quantity);
-    const price = Number(unitPrice);
+    const price = unitPrice === undefined || unitPrice === null || unitPrice === ''
+      ? 0
+      : Number(unitPrice);
 
     if (Number.isNaN(qty) || qty <= 0) {
       return res.status(400).json({ message: 'Quantity must be a positive number' });
