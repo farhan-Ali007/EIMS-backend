@@ -108,17 +108,39 @@ export const getCustomerById = async (req, res) => {
 export const createCustomer = async (req, res) => {
   const customer = new Customer(req.body);
   try {
-    // If a product string is provided, attempt to resolve it to a Product and
+    // Prevent accidental persistence of unsupported top-level fields
+    if (Object.prototype.hasOwnProperty.call(req.body, 'productId')) {
+      delete customer.productId;
+    }
+
+    // If a product is provided, attempt to resolve it to a Product and
     // store structured info on the customer (productInfo) before saving.
-    if (customer.product) {
+    // Prefer productId when provided; fall back to product name.
+    if (req.body?.productId || customer.product) {
       try {
-        const productDoc = await Product.findOne({ name: customer.product });
+        let productDoc = null;
+
+        if (req.body?.productId) {
+          productDoc = await Product.findById(req.body.productId);
+        }
+
+        if (!productDoc && customer.product) {
+          productDoc = await Product.findOne({ name: customer.product });
+          if (!productDoc) {
+            const escaped = String(customer.product).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            productDoc = await Product.findOne({ name: new RegExp(`^${escaped}$`, 'i') });
+          }
+        }
+
         if (productDoc) {
           customer.productInfo = {
             productId: productDoc._id,
             name: productDoc.name,
             model: productDoc.model,
           };
+
+          // Normalize stored product name
+          customer.product = productDoc.name;
         }
       } catch (lookupError) {
         console.error('Error resolving product for customer.product:', lookupError);
@@ -229,6 +251,38 @@ export const updateCustomer = async (req, res) => {
       ? { ...((existingCustomer.productInfo.toObject?.() || existingCustomer.productInfo)) }
       : undefined;
 
+    const incomingProductId = Object.prototype.hasOwnProperty.call(req.body, 'productId')
+      ? req.body.productId
+      : undefined;
+
+    // Prevent accidental persistence of unsupported top-level fields
+    if (Object.prototype.hasOwnProperty.call(req.body, 'productId')) {
+      delete req.body.productId;
+    }
+
+    // productId takes precedence over product name.
+    // This ensures stable association even if product names/models change.
+    if (incomingProductId !== undefined) {
+      if (!incomingProductId) {
+        existingCustomer.product = '';
+        existingCustomer.productInfo = undefined;
+      } else {
+        try {
+          const productDoc = await Product.findById(incomingProductId);
+          if (productDoc) {
+            existingCustomer.productInfo = {
+              productId: productDoc._id,
+              name: productDoc.name,
+              model: productDoc.model,
+            };
+            existingCustomer.product = productDoc.name;
+          }
+        } catch (lookupError) {
+          console.error('Error resolving product by productId for customer update:', lookupError);
+        }
+      }
+    }
+
     // If a product string is provided in the update:
     // - when non-empty, resolve it to a Product and update structured productInfo.
     // - when empty string or null, clear product and productInfo.
@@ -250,9 +304,20 @@ export const updateCustomer = async (req, res) => {
             };
             existingCustomer.product = productDoc.name;
           } else {
-            // If we can't resolve it, still store the string and clear structured info
-            existingCustomer.product = incomingProduct;
-            existingCustomer.productInfo = undefined;
+            const escaped = String(incomingProduct).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const productDocCI = await Product.findOne({ name: new RegExp(`^${escaped}$`, 'i') });
+            if (productDocCI) {
+              existingCustomer.productInfo = {
+                productId: productDocCI._id,
+                name: productDocCI.name,
+                model: productDocCI.model,
+              };
+              existingCustomer.product = productDocCI.name;
+            } else {
+              // If we can't resolve it, still store the string and clear structured info
+              existingCustomer.product = incomingProduct;
+              existingCustomer.productInfo = undefined;
+            }
           }
         } catch (lookupError) {
           console.error('Error resolving product for customer update:', lookupError);
@@ -269,7 +334,21 @@ export const updateCustomer = async (req, res) => {
     // when only non-product fields (e.g. price) are edited.
     if (existingCustomer.product) {
       try {
-        const productDoc = await Product.findOne({ name: existingCustomer.product });
+        let productDoc = null;
+
+        if (existingCustomer.productInfo?.productId) {
+          productDoc = await Product.findById(existingCustomer.productInfo.productId);
+        }
+
+        if (!productDoc) {
+          productDoc = await Product.findOne({ name: existingCustomer.product });
+        }
+
+        if (!productDoc) {
+          const escaped = String(existingCustomer.product).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          productDoc = await Product.findOne({ name: new RegExp(`^${escaped}$`, 'i') });
+        }
+
         if (productDoc) {
           existingCustomer.productInfo = {
             productId: productDoc._id,
