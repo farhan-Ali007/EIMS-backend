@@ -225,6 +225,9 @@ export const updateCustomer = async (req, res) => {
     // Preserve previous state before applying updates
     const prevType = existingCustomer.type;
     const prevProduct = existingCustomer.product;
+    const prevProductInfo = existingCustomer.productInfo
+      ? { ...((existingCustomer.productInfo.toObject?.() || existingCustomer.productInfo)) }
+      : undefined;
 
     // If a product string is provided in the update:
     // - when non-empty, resolve it to a Product and update structured productInfo.
@@ -279,7 +282,7 @@ export const updateCustomer = async (req, res) => {
 
     try {
       const prevProductDoc = prevOnlineWithProduct
-        ? await resolveProductFromSnapshot(prevType, existingCustomer.productInfo, prevProduct)
+        ? await resolveProductFromSnapshot(prevType, prevProductInfo, prevProduct)
         : null;
       const newProductDoc = newOnlineWithProduct
         ? await resolveProductFromSnapshot(
