@@ -147,13 +147,15 @@ export const createCustomer = async (req, res) => {
       }
     }
 
+    // Commission is applied after saving (below) when seller + product are provided.
+
     const newCustomer = await customer.save();
 
-    // If this is a new online customer with a product, also decrement matching product stock by 1.
+    // If this is a new customer with a product, also decrement matching product stock by 1.
     // Prefer the structured productInfo.productId if available; otherwise
     // fall back to matching by product name string. Only log errors so
     // stock issues do not block customer creation.
-    if (newCustomer.type === 'online' && newCustomer.product) {
+    if (newCustomer.product) {
       try {
         let productDoc = null;
 
@@ -191,9 +193,9 @@ export const createCustomer = async (req, res) => {
       }
     }
 
-    // If this is a new online customer with a product and a referred seller,
+    // If this is a new customer with a product and a referred seller,
     // add commission for the seller (quantity assumed as 1) and create a commission history entry.
-    if (newCustomer.type === 'online' && newCustomer.product && newCustomer.seller) {
+    if (newCustomer.product && newCustomer.seller) {
       try {
         const seller = await Seller.findById(newCustomer.seller);
 
@@ -213,6 +215,7 @@ export const createCustomer = async (req, res) => {
 
           await Sale.create({
             // productId is optional here because Customer.product is a free-text field
+            productId: newCustomer.productInfo?.productId,
             sellerId: seller._id,
             customerId: newCustomer._id,
             productName: newCustomer.product,
@@ -250,6 +253,7 @@ export const updateCustomer = async (req, res) => {
     const prevProductInfo = existingCustomer.productInfo
       ? { ...((existingCustomer.productInfo.toObject?.() || existingCustomer.productInfo)) }
       : undefined;
+    const prevSellerId = existingCustomer.seller ? String(existingCustomer.seller) : undefined;
 
     const incomingProductId = Object.prototype.hasOwnProperty.call(req.body, 'productId')
       ? req.body.productId
@@ -378,35 +382,35 @@ export const updateCustomer = async (req, res) => {
     const updatedCustomer = await existingCustomer.save();
 
     // Decide stock adjustments based on before/after states
-    const prevOnlineWithProduct = prevType === 'online' && !!prevProduct;
-    const newOnlineWithProduct =
-      updatedCustomer.type === 'online' && !!updatedCustomer.product;
+    const prevWithProduct = !!prevProductInfo?.productId || !!prevProduct;
+    const newWithProduct = !!updatedCustomer.productInfo?.productId || !!updatedCustomer.product;
 
-    // Helper to resolve a product from a snapshot (type + productInfo + product string)
-    const resolveProductFromSnapshot = async (type, productInfo, productStr) => {
-      if (type !== 'online' || !productStr) return null;
-
+    // Helper to resolve a product from a snapshot (productInfo + product string)
+    const resolveProductFromSnapshot = async (productInfo, productStr) => {
       if (productInfo?.productId) {
         const byId = await Product.findById(productInfo.productId);
         if (byId) return byId;
       }
-      return Product.findOne({ name: productStr });
+
+      if (!productStr) return null;
+
+      const byName = await Product.findOne({ name: productStr });
+      if (byName) return byName;
+
+      const escaped = String(productStr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return Product.findOne({ name: new RegExp(`^${escaped}$`, 'i') });
     };
 
     try {
-      const prevProductDoc = prevOnlineWithProduct
-        ? await resolveProductFromSnapshot(prevType, prevProductInfo, prevProduct)
+      const prevProductDoc = prevWithProduct
+        ? await resolveProductFromSnapshot(prevProductInfo, prevProduct)
         : null;
-      const newProductDoc = newOnlineWithProduct
-        ? await resolveProductFromSnapshot(
-            updatedCustomer.type,
-            updatedCustomer.productInfo,
-            updatedCustomer.product
-          )
+      const newProductDoc = newWithProduct
+        ? await resolveProductFromSnapshot(updatedCustomer.productInfo, updatedCustomer.product)
         : null;
 
       // Case 1: previously no product, now has product -> decrement new product stock
-      if (!prevOnlineWithProduct && newOnlineWithProduct && newProductDoc) {
+      if (!prevWithProduct && newWithProduct && newProductDoc) {
         const quantity = 1;
         const updated = await Product.findOneAndUpdate(
           { _id: newProductDoc._id, stock: { $gte: quantity } },
@@ -421,7 +425,7 @@ export const updateCustomer = async (req, res) => {
       }
 
       // Case 2: previously had product, now none -> increment previous product stock
-      if (prevOnlineWithProduct && !newOnlineWithProduct && prevProductDoc) {
+      if (prevWithProduct && !newWithProduct && prevProductDoc) {
         const quantity = 1;
         await Product.findByIdAndUpdate(prevProductDoc._id, {
           $inc: { stock: quantity },
@@ -429,7 +433,7 @@ export const updateCustomer = async (req, res) => {
       }
 
       // Case 3: had product A, now has product B
-      if (prevOnlineWithProduct && newOnlineWithProduct && prevProductDoc && newProductDoc) {
+      if (prevWithProduct && newWithProduct && prevProductDoc && newProductDoc) {
         const sameProduct = String(prevProductDoc._id) === String(newProductDoc._id);
         if (!sameProduct) {
           const quantity = 1;
@@ -455,6 +459,104 @@ export const updateCustomer = async (req, res) => {
       console.error('Error adjusting product stock for online customer (update):', stockError);
     }
 
+    // Commission adjustments (applies to both online and offline)
+    // Rules:
+    // - If seller+product removed => reverse previous commission + delete Sale.
+    // - If seller+product added => apply commission + create Sale.
+    // - If seller or product changed => reverse previous, apply new.
+    try {
+      const newSellerId = updatedCustomer.seller ? String(updatedCustomer.seller) : undefined;
+      const prevHasCommissionable = !!prevSellerId && prevWithProduct;
+      const newHasCommissionable = !!newSellerId && newWithProduct;
+
+      const findExistingSale = async (sellerId, productInfo, productStr) => {
+        if (!sellerId) return null;
+        const baseQuery = { sellerId, customerId: updatedCustomer._id };
+
+        if (productInfo?.productId) {
+          const byPid = await Sale.findOne({ ...baseQuery, productId: productInfo.productId });
+          if (byPid) return byPid;
+        }
+
+        if (productStr) {
+          const byName = await Sale.findOne({ ...baseQuery, productName: productStr });
+          if (byName) return byName;
+          const escaped = String(productStr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return Sale.findOne({ ...baseQuery, productName: new RegExp(`^${escaped}$`, 'i') });
+        }
+
+        return null;
+      };
+
+      const adjustSellerCommission = async (sellerId, delta) => {
+        const seller = await Seller.findById(sellerId);
+        if (!seller) return;
+
+        const nextCommission = Number(seller.commission || 0) + Number(delta || 0);
+        const nextTotalCommission = Number(seller.totalCommission || 0) + Number(delta || 0);
+
+        seller.commission = Math.max(0, nextCommission);
+        seller.totalCommission = Math.max(0, nextTotalCommission);
+        await seller.save();
+      };
+
+      const applyCommission = async () => {
+        const seller = await Seller.findById(newSellerId);
+        if (!seller) return;
+
+        const quantity = 1;
+        const perUnitCommission = Number(seller.commissionRate || 0);
+        const commission = perUnitCommission * quantity;
+        await adjustSellerCommission(seller._id, commission);
+
+        const unitPrice = Number(updatedCustomer.price || 0);
+        const total = unitPrice * quantity;
+
+        await Sale.create({
+          productId: updatedCustomer.productInfo?.productId,
+          sellerId: seller._id,
+          customerId: updatedCustomer._id,
+          productName: updatedCustomer.product,
+          sellerName: seller.name,
+          customerName: updatedCustomer.name,
+          quantity,
+          unitPrice,
+          total,
+          commission
+        });
+      };
+
+      const reverseCommission = async () => {
+        const existingSale = await findExistingSale(prevSellerId, prevProductInfo, prevProduct);
+        if (!existingSale) return;
+        await adjustSellerCommission(prevSellerId, -Number(existingSale.commission || 0));
+        await Sale.findByIdAndDelete(existingSale._id);
+      };
+
+      if (!prevHasCommissionable && newHasCommissionable) {
+        await applyCommission();
+      }
+
+      if (prevHasCommissionable && !newHasCommissionable) {
+        await reverseCommission();
+      }
+
+      if (prevHasCommissionable && newHasCommissionable) {
+        const prevProdKey = prevProductInfo?.productId ? String(prevProductInfo.productId) : String(prevProduct || '');
+        const newProdKey = updatedCustomer.productInfo?.productId
+          ? String(updatedCustomer.productInfo.productId)
+          : String(updatedCustomer.product || '');
+
+        const changed = prevSellerId !== newSellerId || prevProdKey !== newProdKey;
+        if (changed) {
+          await reverseCommission();
+          await applyCommission();
+        }
+      }
+    } catch (commissionError) {
+      console.error('Error adjusting seller commission for customer update:', commissionError);
+    }
+
     res.json(updatedCustomer);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -469,9 +571,9 @@ export const deleteCustomer = async (req, res) => {
       return res.status(404).json({ message: 'Customer not found' });
     }
 
-    // If this was an online customer with an associated product, return 1 unit
+    // If this customer has an associated product, return 1 unit
     // of stock to that product before deleting the customer.
-    if (customer.type === 'online' && customer.product) {
+    if (customer.productInfo?.productId || customer.product) {
       try {
         let productDoc = null;
 
@@ -481,6 +583,10 @@ export const deleteCustomer = async (req, res) => {
 
         if (!productDoc) {
           productDoc = await Product.findOne({ name: customer.product });
+          if (!productDoc && customer.product) {
+            const escaped = String(customer.product).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            productDoc = await Product.findOne({ name: new RegExp(`^${escaped}$`, 'i') });
+          }
         }
 
         if (productDoc) {
@@ -490,6 +596,38 @@ export const deleteCustomer = async (req, res) => {
         console.error('Error restoring product stock when deleting customer:', stockError);
         // Do not block customer deletion if stock adjustment fails
       }
+    }
+
+    try {
+      if (customer.seller && (customer.productInfo?.productId || customer.product)) {
+        const baseQuery = { sellerId: customer.seller, customerId: customer._id };
+        let saleDoc = null;
+
+        if (customer.productInfo?.productId) {
+          saleDoc = await Sale.findOne({ ...baseQuery, productId: customer.productInfo.productId });
+        }
+
+        if (!saleDoc && customer.product) {
+          saleDoc = await Sale.findOne({ ...baseQuery, productName: customer.product });
+          if (!saleDoc) {
+            const escaped = String(customer.product).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            saleDoc = await Sale.findOne({ ...baseQuery, productName: new RegExp(`^${escaped}$`, 'i') });
+          }
+        }
+
+        if (saleDoc) {
+          const seller = await Seller.findById(customer.seller);
+          if (seller) {
+            const delta = -Number(saleDoc.commission || 0);
+            seller.commission = Math.max(0, Number(seller.commission || 0) + delta);
+            seller.totalCommission = Math.max(0, Number(seller.totalCommission || 0) + delta);
+            await seller.save();
+          }
+          await Sale.findByIdAndDelete(saleDoc._id);
+        }
+      }
+    } catch (commissionError) {
+      console.error('Error reversing seller commission when deleting customer:', commissionError);
     }
 
     await Customer.findByIdAndDelete(req.params.id);
