@@ -262,6 +262,28 @@ export const updateCustomer = async (req, res) => {
 
     // Apply remaining updates on the existing instance so we can compare before/after
     Object.assign(existingCustomer, req.body);
+
+    // After applying body updates, if the customer still has a product name but
+    // productInfo is missing or out of date, refresh it from the current Product
+    // document. This keeps model/name in sync with the Products collection even
+    // when only non-product fields (e.g. price) are edited.
+    if (existingCustomer.product) {
+      try {
+        const productDoc = await Product.findOne({ name: existingCustomer.product });
+        if (productDoc) {
+          existingCustomer.productInfo = {
+            productId: productDoc._id,
+            name: productDoc.name,
+            model: productDoc.model,
+          };
+          // Normalize stored product name
+          existingCustomer.product = productDoc.name;
+        }
+      } catch (lookupError) {
+        console.error('Error refreshing productInfo during customer update:', lookupError);
+      }
+    }
+
     const updatedCustomer = await existingCustomer.save();
 
     // Decide stock adjustments based on before/after states
