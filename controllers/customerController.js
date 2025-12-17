@@ -106,6 +106,17 @@ export const getCustomerById = async (req, res) => {
 
 // Create customer
 export const createCustomer = async (req, res) => {
+  if (Object.prototype.hasOwnProperty.call(req.body, 'customDate')) {
+    if (!req.body.customDate) {
+      delete req.body.customDate;
+    } else {
+      const parsed = new Date(req.body.customDate);
+      if (Number.isNaN(parsed.getTime())) {
+        delete req.body.customDate;
+      }
+    }
+  }
+
   const customer = new Customer(req.body);
   try {
     // Prevent accidental persistence of unsupported top-level fields
@@ -245,6 +256,18 @@ export const updateCustomer = async (req, res) => {
     const existingCustomer = await Customer.findById(req.params.id);
     if (!existingCustomer) {
       return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'customDate')) {
+      if (!req.body.customDate) {
+        existingCustomer.customDate = undefined;
+      } else {
+        const parsed = new Date(req.body.customDate);
+        if (!Number.isNaN(parsed.getTime())) {
+          existingCustomer.customDate = parsed;
+        }
+      }
+      delete req.body.customDate;
     }
 
     // Preserve previous state before applying updates

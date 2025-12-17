@@ -41,6 +41,9 @@ const customerSchema = new mongoose.Schema({
   address: {
     type: String,
     trim: true
+  },
+  customDate: {
+    type: Date
   }
 }, {
   timestamps: true
