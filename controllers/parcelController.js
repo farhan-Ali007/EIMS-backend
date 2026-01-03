@@ -4,11 +4,66 @@ import Product from '../models/Product.js';
 // Get parcels list (with optional filters)
 export const getParcels = async (req, res) => {
   try {
-    const { tracking, status, paymentStatus, date, month } = req.query;
+    const { tracking, status, paymentStatus, date, month, search } = req.query;
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
 
     const filter = {};
+
+    const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const normalizeText = (input) => {
+      if (input == null) return '';
+
+      return String(input)
+        .normalize('NFKC')
+        .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+        .replace(/\u0640/g, '')
+        .replace(/[\u064A\u0649]/g, 'ی')
+        .replace(/\u0643/g, 'ک')
+        .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+        .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
+    };
+
+    const buildUrduAwarePattern = (input) => {
+      const s = normalizeText(input).trim();
+      if (!s) return '';
+
+      const digitClass = {
+        0: '[0٠۰]',
+        1: '[1١۱]',
+        2: '[2٢۲]',
+        3: '[3٣۳]',
+        4: '[4٤۴]',
+        5: '[5٥۵]',
+        6: '[6٦۶]',
+        7: '[7٧۷]',
+        8: '[8٨۸]',
+        9: '[9٩۹]',
+      };
+
+      return s
+        .split('')
+        .map((ch) => {
+          if (ch === ' ') return '\\s*';
+          if (digitClass[ch] != null) return digitClass[ch];
+          if (ch === 'ی') return '[یيى]';
+          if (ch === 'ک') return '[کك]';
+          return escapeRegex(ch);
+        })
+        .join('');
+    };
+
+    if (search) {
+      const pattern = buildUrduAwarePattern(search);
+      if (pattern) {
+        filter.$or = [
+          { trackingNumber: { $regex: pattern, $options: 'i' } },
+          { customerName: { $regex: pattern, $options: 'i' } },
+          { address: { $regex: pattern, $options: 'i' } },
+          { notes: { $regex: pattern, $options: 'i' } },
+        ];
+      }
+    }
 
     if (tracking) {
       filter.trackingNumber = { $regex: tracking, $options: 'i' };
