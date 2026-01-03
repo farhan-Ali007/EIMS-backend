@@ -4,7 +4,7 @@ import Product from '../models/Product.js';
 // Get parcels list (with optional filters)
 export const getParcels = async (req, res) => {
   try {
-    const { tracking, status, paymentStatus } = req.query;
+    const { tracking, status, paymentStatus, date, month } = req.query;
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
 
@@ -18,6 +18,26 @@ export const getParcels = async (req, res) => {
     }
     if (paymentStatus) {
       filter.paymentStatus = paymentStatus;
+    }
+
+    // Filter by createdAt (exact date or month)
+    // date=YYYY-MM-DD takes precedence over month=YYYY-MM
+    if (date) {
+      const start = new Date(`${date}T00:00:00.000Z`);
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 1);
+
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+        filter.createdAt = { $gte: start, $lt: end };
+      }
+    } else if (month) {
+      const start = new Date(`${month}-01T00:00:00.000Z`);
+      const end = new Date(start);
+      end.setUTCMonth(end.getUTCMonth() + 1);
+
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+        filter.createdAt = { $gte: start, $lt: end };
+      }
     }
 
     const [total, parcels] = await Promise.all([
