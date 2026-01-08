@@ -5,6 +5,10 @@ const saleSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product'
   },
+  isCustomerCommissionSale: {
+    type: Boolean,
+    default: false
+  },
   sellerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Seller',

@@ -1,5 +1,26 @@
 import mongoose from 'mongoose';
 
+const customerProductInfoSchema = new mongoose.Schema(
+  {
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product'
+    },
+    name: {
+      type: String
+    },
+    model: {
+      type: String
+    },
+    quantity: {
+      type: Number,
+      min: 1,
+      default: 1
+    }
+  },
+  { _id: false }
+);
+
 const customerSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -25,6 +46,10 @@ const customerSchema = new mongoose.Schema({
     model: {
       type: String
     }
+  },
+  productsInfo: {
+    type: [customerProductInfoSchema],
+    default: undefined
   },
   seller: {
     type: mongoose.Schema.Types.ObjectId,

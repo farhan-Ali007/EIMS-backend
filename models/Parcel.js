@@ -7,9 +7,21 @@ const parcelSchema = new mongoose.Schema(
       ref: 'Product',
       required: true
     },
+    productsInfo: [
+      {
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+        name: { type: String },
+        model: { type: String },
+        quantity: { type: Number, default: 1, min: 1 },
+      },
+    ],
     customerName: {
       type: String,
       required: true,
+      trim: true
+    },
+    phone: {
+      type: String,
       trim: true
     },
     trackingNumber: {

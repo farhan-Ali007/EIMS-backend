@@ -1,10 +1,8 @@
 import Bill from '../models/Bill.js';
-import Product from '../models/Product.js';
-import Customer from '../models/Customer.js';
-import Admin from '../models/Admin.js';
-import Seller from '../models/Seller.js';
-import Sale from '../models/Sale.js';
 import Income from '../models/Income.js';
+import Product from '../models/Product.js';
+import Sale from '../models/Sale.js';
+import Seller from '../models/Seller.js';
 
 // Get all bills with pagination and filters
 export const getBills = async (req, res) => {

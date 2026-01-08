@@ -3,6 +3,235 @@ import Sale from '../models/Sale.js';
 import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
 
+const toObjectIdString = (v) => (v == null ? '' : String(v));
+
+const normalizeIncomingProductsInfo = (productsInfo) => {
+  if (!Array.isArray(productsInfo)) return undefined;
+  const cleaned = productsInfo
+    .map((item) => {
+      const productId = item?.productId ? String(item.productId) : '';
+      const quantity = Number(item?.quantity);
+      return {
+        productId,
+        quantity: Number.isFinite(quantity) ? quantity : 1,
+      };
+    })
+    .filter((x) => x.productId && x.quantity > 0);
+
+  if (cleaned.length === 0) return [];
+
+  const byId = new Map();
+  for (const item of cleaned) {
+    const key = String(item.productId);
+    const prev = byId.get(key);
+    byId.set(key, {
+      productId: key,
+      quantity: (prev?.quantity || 0) + item.quantity,
+    });
+  }
+
+  return Array.from(byId.values());
+};
+
+const snapshotCustomerProducts = (customer) => {
+  const list = Array.isArray(customer?.productsInfo) ? customer.productsInfo : undefined;
+  if (list && list.length > 0) {
+    return list
+      .map((x) => ({
+        productId: x?.productId ? String(x.productId) : '',
+        name: x?.name,
+        model: x?.model,
+        quantity: Number(x?.quantity || 1),
+      }))
+      .filter((x) => x.productId && x.quantity > 0);
+  }
+
+  if (customer?.productInfo?.productId) {
+    return [
+      {
+        productId: String(customer.productInfo.productId),
+        name: customer.productInfo?.name,
+        model: customer.productInfo?.model,
+        quantity: 1,
+      },
+    ];
+  }
+
+  return [];
+};
+
+const resolveProductsInfoDocs = async (incomingList) => {
+  const normalized = normalizeIncomingProductsInfo(incomingList);
+  if (normalized === undefined) return { normalized: undefined, resolved: [] };
+  if (normalized.length === 0) return { normalized: [], resolved: [] };
+
+  const ids = normalized.map((x) => x.productId);
+  const productDocs = await Product.find({ _id: { $in: ids } });
+  const map = new Map(productDocs.map((p) => [String(p._id), p]));
+
+  const resolved = normalized.map((x) => {
+    const doc = map.get(String(x.productId));
+    return {
+      productId: x.productId,
+      quantity: x.quantity,
+      doc,
+    };
+  });
+
+  return { normalized, resolved };
+};
+
+const validateStockForResolved = (resolved) => {
+  for (const item of resolved) {
+    if (!item.doc) {
+      return { ok: false, message: 'Product not found' };
+    }
+    const available = Number(item.doc.stock || 0);
+    const requested = Number(item.quantity || 0);
+    if (requested < 1 || !Number.isFinite(requested)) {
+      return { ok: false, message: 'Invalid quantity. Must be a positive number.' };
+    }
+    if (available < requested) {
+      return {
+        ok: false,
+        message: `Insufficient stock for ${item.doc.name}. Available: ${available}, Requested: ${requested}`,
+      };
+    }
+  }
+  return { ok: true };
+};
+
+const applyStockDeltas = async (deltas) => {
+  const touched = [];
+
+  try {
+    for (const d of deltas) {
+      const productId = String(d.productId);
+      const delta = Number(d.delta || 0);
+      if (!productId || !Number.isFinite(delta) || delta === 0) continue;
+
+      if (delta > 0) {
+        const updated = await Product.findOneAndUpdate(
+          { _id: productId, stock: { $gte: delta } },
+          { $inc: { stock: -delta } },
+          { new: true }
+        );
+        if (!updated) {
+          throw new Error('INSUFFICIENT_STOCK');
+        }
+        touched.push({ productId, delta });
+      } else {
+        await Product.findByIdAndUpdate(productId, { $inc: { stock: -delta } });
+        touched.push({ productId, delta });
+      }
+    }
+
+    return { ok: true };
+  } catch (error) {
+    for (const t of touched) {
+      try {
+        const revert = -Number(t.delta || 0);
+        if (revert !== 0) {
+          await Product.findByIdAndUpdate(String(t.productId), { $inc: { stock: revert } });
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return { ok: false, error };
+  }
+};
+
+const reverseCustomerCommissionSales = async ({ customer, sellerId, productsInfo, unitPriceOverride }) => {
+  if (!customer?._id) return;
+  const customerId = customer._id;
+
+  const productIds = (Array.isArray(productsInfo) ? productsInfo : [])
+    .map((p) => (p?.productId ? String(p.productId) : ''))
+    .filter(Boolean);
+
+  const baseQuery = {
+    customerId,
+    ...(sellerId ? { sellerId } : {}),
+    ...(productIds.length > 0 ? { productId: { $in: productIds } } : {}),
+    $or: [{ isCustomerCommissionSale: true }, { isCustomerCommissionSale: { $exists: false } }],
+  };
+
+  const customerUnitPrice = Number(
+    unitPriceOverride !== undefined ? unitPriceOverride : (customer?.price || 0)
+  );
+  const legacyGuard = { unitPrice: customerUnitPrice };
+  const hasLegacyGuard = Number.isFinite(customerUnitPrice);
+
+  const sales = await Sale.find({
+    ...baseQuery,
+    ...(hasLegacyGuard ? legacyGuard : { isCustomerCommissionSale: true }),
+  });
+  if (!sales || sales.length === 0) return;
+
+  const bySeller = new Map();
+  for (const s of sales) {
+    const key = String(s.sellerId);
+    bySeller.set(key, (bySeller.get(key) || 0) + Number(s.commission || 0));
+  }
+
+  for (const [sellerId, totalCommission] of bySeller.entries()) {
+    const seller = await Seller.findById(sellerId);
+    if (!seller) continue;
+    seller.commission = Math.max(0, Number(seller.commission || 0) - Number(totalCommission || 0));
+    seller.totalCommission = Math.max(0, Number(seller.totalCommission || 0) - Number(totalCommission || 0));
+    await seller.save();
+  }
+
+  await Sale.deleteMany({ _id: { $in: sales.map((s) => s._id) } });
+};
+
+const applyCustomerCommissionSales = async ({ customer, sellerId, productsInfo }) => {
+  if (!sellerId) return;
+  if (!Array.isArray(productsInfo) || productsInfo.length === 0) return;
+
+  const seller = await Seller.findById(sellerId);
+  if (!seller) return;
+
+  const perUnitCommission = Number(seller.commissionRate || 0);
+  const unitPrice = Number(customer?.price || 0);
+
+  let totalCommission = 0;
+  const salesToCreate = [];
+
+  for (const item of productsInfo) {
+    if (!item?.productId) continue;
+    const quantity = Number(item.quantity || 1);
+    if (!Number.isFinite(quantity) || quantity <= 0) continue;
+
+    const commission = perUnitCommission * quantity;
+    totalCommission += commission;
+
+    salesToCreate.push({
+      productId: item.productId,
+      isCustomerCommissionSale: true,
+      sellerId: seller._id,
+      customerId: customer._id,
+      productName: item.name,
+      sellerName: seller.name,
+      customerName: customer.name,
+      quantity,
+      unitPrice,
+      total: unitPrice * quantity,
+      commission,
+    });
+  }
+
+  if (salesToCreate.length === 0) return;
+
+  seller.commission = Number(seller.commission || 0) + totalCommission;
+  seller.totalCommission = Number(seller.totalCommission || 0) + totalCommission;
+  await seller.save();
+
+  await Sale.insertMany(salesToCreate);
+};
+
 // Get all customers
 export const getCustomers = async (req, res) => {
   try {
@@ -35,10 +264,14 @@ export const previewOnlineCustomerCommissions = async (req, res) => {
     for (const customer of customers) {
       processed += 1;
 
+      const products = snapshotCustomerProducts(customer);
+      const productIds = products.map((p) => p.productId);
+
       const existingSale = await Sale.findOne({
         sellerId: customer.seller,
         customerId: customer._id,
-        productName: customer.product
+        productId: { $in: productIds },
+        isCustomerCommissionSale: true
       });
 
       if (existingSale) {
@@ -52,7 +285,7 @@ export const previewOnlineCustomerCommissions = async (req, res) => {
         continue;
       }
 
-      const quantity = 1;
+      const quantity = products.reduce((sum, p) => sum + Number(p.quantity || 0), 0) || 1;
       const perUnitCommission = Number(seller.commissionRate || 0);
       const commission = perUnitCommission * quantity;
 
@@ -124,10 +357,53 @@ export const createCustomer = async (req, res) => {
       delete customer.productId;
     }
 
+    const { normalized: incomingProductsInfo, resolved } = await resolveProductsInfoDocs(req.body?.productsInfo);
+    let appliedStockDeltas = null;
+
+    if (incomingProductsInfo !== undefined) {
+      if (incomingProductsInfo.length > 0) {
+        const stockOk = validateStockForResolved(resolved);
+        if (!stockOk.ok) {
+          return res.status(400).json({ message: stockOk.message });
+        }
+
+        const stockApplied = await applyStockDeltas(
+          resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) }))
+        );
+
+        if (!stockApplied.ok) {
+          const msg =
+            stockApplied.error?.message === 'INSUFFICIENT_STOCK'
+              ? 'Insufficient stock'
+              : 'Failed to update product stock';
+          return res.status(400).json({ message: msg });
+        }
+
+        appliedStockDeltas = resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) }));
+
+        customer.productsInfo = resolved.map((x) => ({
+          productId: x.doc._id,
+          name: x.doc.name,
+          model: x.doc.model,
+          quantity: Number(x.quantity || 1),
+        }));
+
+        const primary = customer.productsInfo[0];
+        customer.productInfo = primary
+          ? { productId: primary.productId, name: primary.name, model: primary.model }
+          : undefined;
+        customer.product = primary?.name || '';
+      } else {
+        customer.productsInfo = [];
+        customer.productInfo = undefined;
+        customer.product = '';
+      }
+    }
+
     // If a product is provided, attempt to resolve it to a Product and
     // store structured info on the customer (productInfo) before saving.
     // Prefer productId when provided; fall back to product name.
-    if (req.body?.productId || customer.product) {
+    if (incomingProductsInfo === undefined && (req.body?.productId || customer.product)) {
       try {
         let productDoc = null;
 
@@ -152,96 +428,68 @@ export const createCustomer = async (req, res) => {
 
           // Normalize stored product name
           customer.product = productDoc.name;
+
+          customer.productsInfo = [
+            {
+              productId: productDoc._id,
+              name: productDoc.name,
+              model: productDoc.model,
+              quantity: 1,
+            },
+          ];
         }
       } catch (lookupError) {
         console.error('Error resolving product for customer.product:', lookupError);
       }
     }
 
-    // Commission is applied after saving (below) when seller + product are provided.
-
-    const newCustomer = await customer.save();
-
-    // If this is a new customer with a product, also decrement matching product stock by 1.
-    // Prefer the structured productInfo.productId if available; otherwise
-    // fall back to matching by product name string. Only log errors so
-    // stock issues do not block customer creation.
-    if (newCustomer.product) {
-      try {
-        let productDoc = null;
-
-        // Prefer lookup by productInfo.productId when present
-        if (newCustomer.productInfo?.productId) {
-          productDoc = await Product.findById(newCustomer.productInfo.productId);
-        }
-
-        // Fallback: find by name string
-        if (!productDoc) {
-          productDoc = await Product.findOne({ name: newCustomer.product });
-        }
-
-        if (productDoc) {
-          const quantityToDeduct = 1;
-
-          const updatedProduct = await Product.findOneAndUpdate(
-            { _id: productDoc._id, stock: { $gte: quantityToDeduct } },
-            { $inc: { stock: -quantityToDeduct } },
-            { new: true }
-          );
-
-          if (!updatedProduct) {
-            console.warn(
-              `Could not decrement stock for product ${productDoc._id}: not enough stock.`
-            );
-          }
-        } else {
-          console.warn(
-            `No Product document found matching customer.product="${newCustomer.product}"`
-          );
-        }
-      } catch (stockError) {
-        console.error('Error updating product stock for online customer:', stockError);
+    if (incomingProductsInfo === undefined && customer.productsInfo?.length > 0) {
+      const resolvedForSingle = await resolveProductsInfoDocs(customer.productsInfo);
+      const stockOk = validateStockForResolved(resolvedForSingle.resolved);
+      if (!stockOk.ok) {
+        return res.status(400).json({ message: stockOk.message });
       }
+
+      const stockApplied = await applyStockDeltas(
+        resolvedForSingle.resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) }))
+      );
+
+      if (!stockApplied.ok) {
+        const msg =
+          stockApplied.error?.message === 'INSUFFICIENT_STOCK'
+            ? 'Insufficient stock'
+            : 'Failed to update product stock';
+        return res.status(400).json({ message: msg });
+      }
+
+      appliedStockDeltas = resolvedForSingle.resolved.map((x) => ({
+        productId: x.productId,
+        delta: Number(x.quantity || 0),
+      }));
     }
 
-    // If this is a new customer with a product and a referred seller,
-    // add commission for the seller (quantity assumed as 1) and create a commission history entry.
-    if (newCustomer.product && newCustomer.seller) {
-      try {
-        const seller = await Seller.findById(newCustomer.seller);
-
-        if (seller) {
-          const quantity = 1;
-          const perUnitCommission = Number(seller.commissionRate || 0);
-          const commission = perUnitCommission * quantity;
-
-          // Update seller commission totals
-          seller.commission = Number(seller.commission || 0) + commission;
-          seller.totalCommission = Number(seller.totalCommission || 0) + commission;
-          await seller.save();
-
-          // Record commission history using Sale model
-          const unitPrice = Number(newCustomer.price || 0);
-          const total = unitPrice * quantity;
-
-          await Sale.create({
-            // productId is optional here because Customer.product is a free-text field
-            productId: newCustomer.productInfo?.productId,
-            sellerId: seller._id,
-            customerId: newCustomer._id,
-            productName: newCustomer.product,
-            sellerName: seller.name,
-            customerName: newCustomer.name,
-            quantity,
-            unitPrice,
-            total,
-            commission
-          });
+    let newCustomer;
+    try {
+      newCustomer = await customer.save();
+    } catch (saveError) {
+      if (Array.isArray(appliedStockDeltas) && appliedStockDeltas.length > 0) {
+        try {
+          await applyStockDeltas(appliedStockDeltas.map((d) => ({ productId: d.productId, delta: -Number(d.delta || 0) })));
+        } catch {
+          // ignore
         }
-      } catch (commissionError) {
-        // Do not block customer creation if commission logic fails
-        console.error('Error adding commission for online customer:', commissionError);
       }
+      throw saveError;
+    }
+
+    try {
+      await applyCustomerCommissionSales({
+        customer: newCustomer,
+        sellerId: newCustomer.seller,
+        productsInfo: snapshotCustomerProducts(newCustomer),
+      });
+    } catch (commissionError) {
+      console.error('Error adding commission for customer:', commissionError);
     }
 
     res.status(201).json(newCustomer);
@@ -256,6 +504,132 @@ export const updateCustomer = async (req, res) => {
     const existingCustomer = await Customer.findById(req.params.id);
     if (!existingCustomer) {
       return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'productsInfo')) {
+      const prevProducts = snapshotCustomerProducts(existingCustomer);
+      const prevSellerId = existingCustomer.seller ? String(existingCustomer.seller) : undefined;
+      const prevPrice = existingCustomer.price;
+
+      const { normalized: incomingProductsInfo, resolved } = await resolveProductsInfoDocs(req.body?.productsInfo);
+      if (incomingProductsInfo === undefined) {
+        return res.status(400).json({ message: 'Invalid productsInfo' });
+      }
+
+      for (const x of resolved) {
+        const qty = Number(x.quantity || 0);
+        if (!Number.isFinite(qty) || qty < 1) {
+          return res.status(400).json({ message: 'Quantity must be at least 1' });
+        }
+      }
+
+      const incomingSellerId = Object.prototype.hasOwnProperty.call(req.body, 'seller')
+        ? req.body.seller
+        : existingCustomer.seller;
+      const newSellerId = incomingSellerId ? String(incomingSellerId) : undefined;
+
+      const newProducts = resolved.map((x) => ({
+        productId: x.doc._id,
+        name: x.doc.name,
+        model: x.doc.model,
+        quantity: Number(x.quantity || 1),
+      }));
+
+      const prevMap = new Map(prevProducts.map((p) => [String(p.productId), Number(p.quantity || 0)]));
+      const nextMap = new Map(newProducts.map((p) => [String(p.productId), Number(p.quantity || 0)]));
+      const allIds = new Set([...prevMap.keys(), ...nextMap.keys()]);
+
+      const deltas = Array.from(allIds).map((id) => ({
+        productId: id,
+        delta: Math.max(0, Number(nextMap.get(id) || 0) - Number(prevMap.get(id) || 0)),
+      }));
+
+      for (const d of deltas) {
+        if (d.delta > 0) {
+          const doc = await Product.findById(d.productId);
+          const available = Number(doc?.stock || 0);
+          if (!doc || available < d.delta) {
+            return res.status(400).json({
+              message: `Insufficient stock for ${doc?.name || 'product'}. Available: ${available}, Requested: ${d.delta}`,
+            });
+          }
+        }
+      }
+
+      const stockPlan = Array.from(allIds)
+        .map((id) => ({
+          productId: id,
+          delta: Number(nextMap.get(id) || 0) - Number(prevMap.get(id) || 0),
+        }))
+        .filter((x) => x.delta !== 0);
+
+      const stockApplied = await applyStockDeltas(
+        stockPlan.map((x) => ({ productId: x.productId, delta: x.delta }))
+      );
+
+      if (!stockApplied.ok) {
+        const msg =
+          stockApplied.error?.message === 'INSUFFICIENT_STOCK'
+            ? 'Insufficient stock'
+            : 'Failed to update product stock';
+        return res.status(400).json({ message: msg });
+      }
+
+      if (Object.prototype.hasOwnProperty.call(req.body, 'customDate')) {
+        if (!req.body.customDate) {
+          existingCustomer.customDate = undefined;
+        } else {
+          const parsed = new Date(req.body.customDate);
+          if (!Number.isNaN(parsed.getTime())) {
+            existingCustomer.customDate = parsed;
+          }
+        }
+        delete req.body.customDate;
+      }
+
+      const body = { ...req.body };
+      delete body.productsInfo;
+      delete body.product;
+      delete body.productId;
+
+      existingCustomer.productsInfo = newProducts;
+      const primary = newProducts[0];
+      existingCustomer.productInfo = primary
+        ? { productId: primary.productId, name: primary.name, model: primary.model }
+        : undefined;
+      existingCustomer.product = primary?.name || '';
+
+      Object.assign(existingCustomer, body);
+
+      let updatedCustomer;
+      try {
+        updatedCustomer = await existingCustomer.save();
+      } catch (saveError) {
+        try {
+          await applyStockDeltas(stockPlan.map((x) => ({ productId: x.productId, delta: -Number(x.delta || 0) })));
+        } catch {
+          // ignore
+        }
+        throw saveError;
+      }
+
+      try {
+        await reverseCustomerCommissionSales({
+          customer: updatedCustomer,
+          sellerId: prevSellerId,
+          productsInfo: prevProducts,
+          unitPriceOverride: prevPrice,
+        });
+        await applyCustomerCommissionSales({
+          customer: updatedCustomer,
+          sellerId: newSellerId,
+          productsInfo: snapshotCustomerProducts(updatedCustomer),
+        });
+      } catch (commissionError) {
+        console.error('Error adjusting seller commission for customer update:', commissionError);
+      }
+
+      return res.json(updatedCustomer);
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'customDate')) {
@@ -594,67 +968,33 @@ export const deleteCustomer = async (req, res) => {
       return res.status(404).json({ message: 'Customer not found' });
     }
 
-    // If this customer has an associated product, return 1 unit
-    // of stock to that product before deleting the customer.
-    if (customer.productInfo?.productId || customer.product) {
+    const products = snapshotCustomerProducts(customer);
+    if (products.length > 0) {
       try {
-        let productDoc = null;
-
-        if (customer.productInfo?.productId) {
-          productDoc = await Product.findById(customer.productInfo.productId);
-        }
-
-        if (!productDoc) {
-          productDoc = await Product.findOne({ name: customer.product });
-          if (!productDoc && customer.product) {
-            const escaped = String(customer.product).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            productDoc = await Product.findOne({ name: new RegExp(`^${escaped}$`, 'i') });
+        for (const item of products) {
+          const qty = Number(item.quantity || 0);
+          if (item.productId && qty > 0) {
+            await Product.findByIdAndUpdate(String(item.productId), { $inc: { stock: qty } });
           }
-        }
-
-        if (productDoc) {
-          await Product.findByIdAndUpdate(productDoc._id, { $inc: { stock: 1 } });
         }
       } catch (stockError) {
         console.error('Error restoring product stock when deleting customer:', stockError);
-        // Do not block customer deletion if stock adjustment fails
       }
     }
 
     try {
-      if (customer.seller && (customer.productInfo?.productId || customer.product)) {
-        const baseQuery = { sellerId: customer.seller, customerId: customer._id };
-        let saleDoc = null;
-
-        if (customer.productInfo?.productId) {
-          saleDoc = await Sale.findOne({ ...baseQuery, productId: customer.productInfo.productId });
-        }
-
-        if (!saleDoc && customer.product) {
-          saleDoc = await Sale.findOne({ ...baseQuery, productName: customer.product });
-          if (!saleDoc) {
-            const escaped = String(customer.product).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            saleDoc = await Sale.findOne({ ...baseQuery, productName: new RegExp(`^${escaped}$`, 'i') });
-          }
-        }
-
-        if (saleDoc) {
-          const seller = await Seller.findById(customer.seller);
-          if (seller) {
-            const delta = -Number(saleDoc.commission || 0);
-            seller.commission = Math.max(0, Number(seller.commission || 0) + delta);
-            seller.totalCommission = Math.max(0, Number(seller.totalCommission || 0) + delta);
-            await seller.save();
-          }
-          await Sale.findByIdAndDelete(saleDoc._id);
-        }
-      }
+      await reverseCustomerCommissionSales({
+        customer,
+        sellerId: customer.seller,
+        productsInfo: products,
+        unitPriceOverride: customer.price,
+      });
     } catch (commissionError) {
       console.error('Error reversing seller commission when deleting customer:', commissionError);
     }
 
     await Customer.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Customer deleted' });
+    return res.json({ message: 'Customer deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -679,11 +1019,15 @@ export const backfillOnlineCustomerCommissions = async (req, res) => {
     for (const customer of customers) {
       processed += 1;
 
+      const products = snapshotCustomerProducts(customer);
+      const productIds = products.map((p) => p.productId);
+
       // Check if a Sale already exists for this combination
       const existingSale = await Sale.findOne({
         sellerId: customer.seller,
         customerId: customer._id,
-        productName: customer.product
+        productId: { $in: productIds },
+        isCustomerCommissionSale: true
       });
 
       if (existingSale) {
@@ -697,33 +1041,14 @@ export const backfillOnlineCustomerCommissions = async (req, res) => {
         continue;
       }
 
-      const quantity = 1;
-      const perUnitCommission = Number(seller.commissionRate || 0);
-      const commission = perUnitCommission * quantity;
-
-      // Update seller commission totals
-      seller.commission = Number(seller.commission || 0) + commission;
-      seller.totalCommission = Number(seller.totalCommission || 0) + commission;
-      await seller.save();
-
-      // Record commission history using Sale model
-      const unitPrice = Number(customer.price || 0);
-      const total = unitPrice * quantity;
-
-      await Sale.create({
+      await applyCustomerCommissionSales({
+        customer,
         sellerId: seller._id,
-        customerId: customer._id,
-        productName: customer.product,
-        sellerName: seller.name,
-        customerName: customer.name,
-        quantity,
-        unitPrice,
-        total,
-        commission
+        productsInfo: products,
       });
 
       created += 1;
-      totalCommissionAdded += commission;
+      totalCommissionAdded += Number(seller.commissionRate || 0) * (products.reduce((sum, p) => sum + Number(p.quantity || 0), 0) || 1);
     }
 
     res.json({

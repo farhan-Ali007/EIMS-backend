@@ -1,6 +1,67 @@
 import Parcel from '../models/Parcel.js';
 import Product from '../models/Product.js';
 
+const normalizeParcelProducts = ({ productId, productsInfo }) => {
+  if (Array.isArray(productsInfo) && productsInfo.length > 0) {
+    return productsInfo
+      .map((x) => ({
+        productId: x?.productId,
+        quantity: Number(x?.quantity || 1),
+      }))
+      .filter((x) => x.productId);
+  }
+
+  if (productId) {
+    return [{ productId, quantity: 1 }];
+  }
+
+  return [];
+};
+
+const applyParcelStockPlan = async (stockPlan) => {
+  const plan = Array.isArray(stockPlan) ? stockPlan : [];
+  const decremented = [];
+
+  for (const item of plan) {
+    const delta = Number(item?.delta || 0);
+    const productId = item?.productId ? String(item.productId) : '';
+    if (!productId || !Number.isFinite(delta) || delta === 0) continue;
+
+    if (delta > 0) {
+      const updated = await Product.findOneAndUpdate(
+        { _id: productId, stock: { $gte: delta } },
+        { $inc: { stock: -delta } },
+        { new: true }
+      );
+      if (!updated) {
+        for (const d of decremented) {
+          try {
+            await Product.findByIdAndUpdate(d.productId, { $inc: { stock: d.delta } });
+          } catch {
+          }
+        }
+        return { ok: false, error: new Error('INSUFFICIENT_STOCK') };
+      }
+      decremented.push({ productId, delta });
+    }
+  }
+
+  for (const item of plan) {
+    const delta = Number(item?.delta || 0);
+    const productId = item?.productId ? String(item.productId) : '';
+    if (!productId || !Number.isFinite(delta) || delta === 0) continue;
+
+    if (delta < 0) {
+      try {
+        await Product.findByIdAndUpdate(productId, { $inc: { stock: Math.abs(delta) } });
+      } catch {
+      }
+    }
+  }
+
+  return { ok: true };
+};
+
 // Get parcels list (with optional filters)
 export const getParcels = async (req, res) => {
   try {
@@ -59,6 +120,7 @@ export const getParcels = async (req, res) => {
         filter.$or = [
           { trackingNumber: { $regex: pattern, $options: 'i' } },
           { customerName: { $regex: pattern, $options: 'i' } },
+          { phone: { $regex: pattern, $options: 'i' } },
           { address: { $regex: pattern, $options: 'i' } },
           { notes: { $regex: pattern, $options: 'i' } },
         ];
@@ -123,17 +185,32 @@ export const getParcels = async (req, res) => {
 // Create new parcel
 export const createParcel = async (req, res) => {
   try {
-    const { productId, customerName, trackingNumber, address, status, paymentStatus, notes, codAmount, parcelDate } = req.body;
+    const { productId, productsInfo, customerName, phone, trackingNumber, address, status, paymentStatus, notes, codAmount, parcelDate } = req.body;
 
-    if (!productId || !customerName || !trackingNumber || !address) {
+    if (!customerName || !trackingNumber || !address) {
       return res
         .status(400)
-        .json({ message: 'Product, customer name, tracking number and address are required' });
+        .json({ message: 'Customer name, tracking number and address are required' });
     }
 
-    const product = await Product.findById(productId);
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+    const requestedProducts = normalizeParcelProducts({ productId, productsInfo });
+    if (!requestedProducts || requestedProducts.length === 0) {
+      return res.status(400).json({ message: 'Please select at least one product' });
+    }
+
+    const ids = requestedProducts.map((x) => String(x.productId));
+    const docs = await Product.find({ _id: { $in: ids } });
+    const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+    for (const item of requestedProducts) {
+      const id = String(item.productId);
+      const qty = Number(item.quantity || 0);
+      if (!byId.get(id)) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      if (!Number.isFinite(qty) || qty < 1) {
+        return res.status(400).json({ message: 'Quantity must be at least 1' });
+      }
     }
 
     const existing = await Parcel.findOne({ trackingNumber });
@@ -143,8 +220,33 @@ export const createParcel = async (req, res) => {
 
     const numericCodAmount = Number(codAmount || 0);
 
-    const parcel = await Parcel.create({
-      product: productId,
+    const primaryProductId = String(requestedProducts[0].productId);
+    const resolvedProductsInfo = requestedProducts.map((x) => {
+      const doc = byId.get(String(x.productId));
+      return {
+        productId: doc._id,
+        name: doc.name,
+        model: doc.model,
+        quantity: Number(x.quantity || 1),
+      };
+    });
+
+    const stockPlan = resolvedProductsInfo.map((x) => ({
+      productId: x.productId,
+      delta: Number(x.quantity || 0),
+    }));
+
+    const stockApplied = await applyParcelStockPlan(stockPlan);
+    if (!stockApplied.ok) {
+      return res.status(400).json({ message: 'Insufficient stock' });
+    }
+
+    let parcel;
+    try {
+      parcel = await Parcel.create({
+        product: primaryProductId,
+        productsInfo: resolvedProductsInfo,
+      phone: phone ? String(phone).trim() : '',
       customerName: customerName.trim(),
       trackingNumber,
       address,
@@ -154,25 +256,14 @@ export const createParcel = async (req, res) => {
       paymentStatus: paymentStatus || 'unpaid',
       notes: notes || '',
       createdBy: req.admin._id,
-    });
-
-    // After creating the parcel, decrement product stock by 1 if possible.
-    try {
-      const quantityToDeduct = 1;
-      const updatedProduct = await Product.findOneAndUpdate(
-        { _id: productId, stock: { $gte: quantityToDeduct } },
-        { $inc: { stock: -quantityToDeduct } },
-        { new: true }
-      );
-
-      if (!updatedProduct) {
-        console.warn(
-          `Could not decrement stock for product ${productId} when creating parcel: not enough stock or product missing.`
-        );
+      });
+    } catch (saveError) {
+      // rollback the stock deduction if parcel creation fails
+      try {
+        await applyParcelStockPlan(stockPlan.map((x) => ({ productId: x.productId, delta: -Number(x.delta || 0) })));
+      } catch {
       }
-    } catch (stockError) {
-      console.error('Error updating product stock when creating parcel:', stockError);
-      // Do not block parcel creation if stock adjustment fails
+      throw saveError;
     }
 
     const populatedParcel = await Parcel.findById(parcel._id)
@@ -224,7 +315,9 @@ export const updateParcel = async (req, res) => {
 
     const {
       productId,
+      productsInfo,
       customerName,
+      phone,
       trackingNumber,
       address,
       status,
@@ -264,6 +357,10 @@ export const updateParcel = async (req, res) => {
       parcel.address = nextAddress;
     }
 
+    if (phone !== undefined) {
+      parcel.phone = phone ? String(phone).trim() : '';
+    }
+
     if (codAmount !== undefined) {
       const numericCodAmount = Number(codAmount || 0);
       parcel.codAmount = Number.isNaN(numericCodAmount) ? 0 : numericCodAmount;
@@ -292,37 +389,54 @@ export const updateParcel = async (req, res) => {
       parcel.notes = typeof notes === 'string' ? notes : '';
     }
 
-    const prevProductId = parcel.product ? String(parcel.product) : undefined;
-    const nextProductId = productId !== undefined && productId !== null && productId !== ''
-      ? String(productId)
-      : prevProductId;
+    const prevProducts = Array.isArray(parcel.productsInfo) && parcel.productsInfo.length > 0
+      ? parcel.productsInfo.map((x) => ({ productId: x.productId, quantity: Number(x.quantity || 1) }))
+      : (parcel.product ? [{ productId: parcel.product, quantity: 1 }] : []);
 
-    const isProductChanged = prevProductId && nextProductId && prevProductId !== nextProductId;
+    const nextProducts = normalizeParcelProducts({ productId, productsInfo });
 
-    if (isProductChanged) {
-      const productExists = await Product.findById(nextProductId);
-      if (!productExists) {
-        return res.status(404).json({ message: 'Product not found' });
+    if (nextProducts.length > 0) {
+      const prevMap = new Map(prevProducts.map((p) => [String(p.productId), Number(p.quantity || 0)]));
+      const nextMap = new Map(nextProducts.map((p) => [String(p.productId), Number(p.quantity || 0)]));
+      const allIds = new Set([...prevMap.keys(), ...nextMap.keys()]);
+
+      const stockPlan = Array.from(allIds)
+        .map((id) => ({
+          productId: id,
+          delta: Number(nextMap.get(id) || 0) - Number(prevMap.get(id) || 0),
+        }))
+        .filter((x) => x.delta !== 0);
+
+      // Validate quantities and product existence
+      const nextIds = Array.from(nextMap.keys());
+      const docs = await Product.find({ _id: { $in: nextIds } });
+      const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+      for (const [id, qty] of nextMap.entries()) {
+        if (!byId.get(String(id))) {
+          return res.status(404).json({ message: 'Product not found' });
+        }
+        if (!Number.isFinite(qty) || qty < 1) {
+          return res.status(400).json({ message: 'Quantity must be at least 1' });
+        }
       }
 
-      const quantityToDeduct = 1;
-      const updatedNewProduct = await Product.findOneAndUpdate(
-        { _id: nextProductId, stock: { $gte: quantityToDeduct } },
-        { $inc: { stock: -quantityToDeduct } },
-        { new: true }
-      );
-
-      if (!updatedNewProduct) {
-        return res.status(400).json({ message: 'Insufficient stock for selected product' });
+      const stockApplied = await applyParcelStockPlan(stockPlan);
+      if (!stockApplied.ok) {
+        return res.status(400).json({ message: 'Insufficient stock' });
       }
 
-      try {
-        await Product.findByIdAndUpdate(prevProductId, { $inc: { stock: 1 } });
-      } catch (restoreError) {
-        console.error('Error restoring stock to previous product on parcel update:', restoreError);
-      }
-
-      parcel.product = nextProductId;
+      const primaryProductId = String(nextProducts[0].productId);
+      parcel.product = primaryProductId;
+      parcel.productsInfo = nextProducts.map((x) => {
+        const doc = byId.get(String(x.productId));
+        return {
+          productId: doc._id,
+          name: doc.name,
+          model: doc.model,
+          quantity: Number(x.quantity || 1),
+        };
+      });
     }
 
     const saved = await parcel.save();
@@ -344,12 +458,17 @@ export const deleteParcel = async (req, res) => {
       return res.status(404).json({ message: 'Parcel not found' });
     }
 
-    const productId = parcel.product ? String(parcel.product) : undefined;
+    const productsToRestore = Array.isArray(parcel.productsInfo) && parcel.productsInfo.length > 0
+      ? parcel.productsInfo.map((x) => ({ productId: x.productId, quantity: Number(x.quantity || 1) }))
+      : (parcel.product ? [{ productId: parcel.product, quantity: 1 }] : []);
     await Parcel.findByIdAndDelete(req.params.id);
 
-    if (productId) {
+    for (const item of productsToRestore) {
+      const id = item?.productId ? String(item.productId) : '';
+      const qty = Number(item?.quantity || 0);
+      if (!id || !Number.isFinite(qty) || qty <= 0) continue;
       try {
-        await Product.findByIdAndUpdate(productId, { $inc: { stock: 1 } });
+        await Product.findByIdAndUpdate(id, { $inc: { stock: qty } });
       } catch (stockError) {
         console.error('Error restoring stock when deleting parcel:', stockError);
       }
