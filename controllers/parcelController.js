@@ -145,7 +145,15 @@ export const getParcels = async (req, res) => {
       end.setUTCDate(end.getUTCDate() + 1);
 
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        filter.createdAt = { $gte: start, $lt: end };
+        filter.$and = [
+          ...(Array.isArray(filter.$and) ? filter.$and : []),
+          {
+            $or: [
+              { parcelDate: { $gte: start, $lt: end } },
+              { createdAt: { $gte: start, $lt: end } },
+            ],
+          },
+        ];
       }
     } else if (month) {
       const start = new Date(`${month}-01T00:00:00.000Z`);
@@ -153,11 +161,19 @@ export const getParcels = async (req, res) => {
       end.setUTCMonth(end.getUTCMonth() + 1);
 
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        filter.createdAt = { $gte: start, $lt: end };
+        filter.$and = [
+          ...(Array.isArray(filter.$and) ? filter.$and : []),
+          {
+            $or: [
+              { parcelDate: { $gte: start, $lt: end } },
+              { createdAt: { $gte: start, $lt: end } },
+            ],
+          },
+        ];
       }
     }
 
-    const [total, parcels] = await Promise.all([
+    const [total, parcels, totalsAgg] = await Promise.all([
       Parcel.countDocuments(filter),
       Parcel.find(filter)
         .populate('product', 'name model category')
@@ -165,13 +181,31 @@ export const getParcels = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
+      Parcel.aggregate([
+        { $match: filter },
+        {
+          $project: {
+            productUnits: {
+              $cond: [
+                { $gt: [{ $size: { $ifNull: ['$productsInfo', []] } }, 0] },
+                { $sum: '$productsInfo.quantity' },
+                1,
+              ],
+            },
+          },
+        },
+        { $group: { _id: null, totalProductUnits: { $sum: '$productUnits' } } },
+      ]),
     ]);
+
+    const totalProductUnits = Number(totalsAgg?.[0]?.totalProductUnits || 0);
 
     const totalPages = Math.max(Math.ceil(total / limit), 1);
 
     res.json({
       data: parcels,
       total,
+      totalProductUnits,
       page,
       totalPages,
       limit,
