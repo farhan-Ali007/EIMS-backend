@@ -10,6 +10,7 @@ import {
   updateBillStatus,
   cancelBill,
   addBillPayment,
+  getCustomerLastProductPrice,
 } from '../controllers/billController.js';
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.use(authenticate, authorizeManagerOrAdmin);
 router.get('/', getBills);
 router.get('/stats/overview', getBillingStats);
 router.get('/customer/:customerId/history', getCustomerHistory);
+router.get('/customer/:customerId/last-price', getCustomerLastProductPrice);
 router.get('/:id', getBillById);
 router.post('/', createBill);
 router.put('/:id', updateBill);

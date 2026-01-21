@@ -373,6 +373,35 @@ export const getCustomerHistory = async (req, res) => {
   }
 };
 
+// Get the last unit price a customer paid for a specific product (based on Sales)
+export const getCustomerLastProductPrice = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const { productId } = req.query;
+
+    if (!customerId || !productId) {
+      return res.status(400).json({ message: 'customerId (param) and productId (query) are required' });
+    }
+
+    const sale = await Sale.findOne({ customerId, productId })
+      .sort({ createdAt: -1 })
+      .select('unitPrice createdAt');
+
+    if (!sale) {
+      return res.json({ found: false });
+    }
+
+    return res.json({
+      found: true,
+      unitPrice: sale.unitPrice,
+      date: sale.createdAt,
+    });
+  } catch (error) {
+    console.error('Error fetching customer last product price:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 // Get billing statistics
 export const getBillingStats = async (req, res) => {
   try {

@@ -23,6 +23,10 @@ import adminRoutes from './routes/admins.js';
 import returnRoutes from './routes/returns.js';
 import parcelRoutes from './routes/parcels.js';
 import bookPORoutes from './routes/book-po.js';
+import adSpendRoutes from './routes/adspend.js';
+import dispatchRecordRoutes from './routes/dispatch-records.js';
+import lcsRoutes from './routes/lcs.js';
+import lcsParcelRoutes from './routes/lcs-parcels.js';
 
 // Import middleware
 import { authenticate } from './middleware/auth.js';
@@ -78,6 +82,10 @@ app.use('/api/admins', authenticate, adminRoutes);
 app.use('/api/returns', authenticate, returnRoutes);
 app.use('/api/parcels', authenticate, parcelRoutes);
 app.use('/api/book-po', authenticate, bookPORoutes);
+app.use('/api/adspend', authenticate, adSpendRoutes);
+app.use('/api/dispatch-records', authenticate, dispatchRecordRoutes);
+app.use('/api/lcs', authenticate, lcsRoutes);
+app.use('/api/lcs-parcels', authenticate, lcsParcelRoutes);
 
 // Serve frontend static files from Vite dist folder
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
