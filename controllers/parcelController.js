@@ -280,16 +280,18 @@ export const createParcel = async (req, res) => {
       parcel = await Parcel.create({
         product: primaryProductId,
         productsInfo: resolvedProductsInfo,
-      phone: phone ? String(phone).trim() : '',
-      customerName: customerName.trim(),
-      trackingNumber,
-      address,
-      codAmount: Number.isNaN(numericCodAmount) ? 0 : numericCodAmount,
-      parcelDate: parcelDate ? new Date(parcelDate) : new Date(),
-      status: status || 'processing',
-      paymentStatus: paymentStatus || 'unpaid',
-      notes: notes || '',
-      createdBy: req.admin._id,
+        phone: phone ? String(phone).trim() : '',
+        customerName: customerName.trim(),
+        trackingNumber,
+        // Use tracking number as the primary barcode value for now
+        barcodeValue: trackingNumber,
+        address,
+        codAmount: Number.isNaN(numericCodAmount) ? 0 : numericCodAmount,
+        parcelDate: parcelDate ? new Date(parcelDate) : new Date(),
+        status: status || 'processing',
+        paymentStatus: paymentStatus || 'unpaid',
+        notes: notes || '',
+        createdBy: req.admin._id,
       });
     } catch (saveError) {
       // rollback the stock deduction if parcel creation fails
@@ -316,16 +318,7 @@ export const updateParcelStatus = async (req, res) => {
   try {
     const { status, paymentStatus, notes } = req.body;
 
-    const update = {};
-    if (status) update.status = status;
-    if (paymentStatus) update.paymentStatus = paymentStatus;
-    if (typeof notes === 'string') update.notes = notes;
-
-    const parcel = await Parcel.findByIdAndUpdate(
-      req.params.id,
-      update,
-      { new: true, runValidators: true }
-    )
+    const parcel = await Parcel.findById(req.params.id)
       .populate('product', 'name model category')
       .populate('createdBy', 'username email');
 
@@ -333,7 +326,41 @@ export const updateParcelStatus = async (req, res) => {
       return res.status(404).json({ message: 'Parcel not found' });
     }
 
-    res.json(parcel);
+    const prevStatus = parcel.status;
+    const nextStatus = status || prevStatus;
+
+    // If we are moving into 'return' from a non-return status, restore stock once
+    if (prevStatus !== 'return' && nextStatus === 'return') {
+      const productsToRestore = Array.isArray(parcel.productsInfo) && parcel.productsInfo.length > 0
+        ? parcel.productsInfo.map((x) => ({ productId: x.productId, quantity: Number(x.quantity || 1) }))
+        : (parcel.product ? [{ productId: parcel.product, quantity: 1 }] : []);
+
+      const stockPlan = productsToRestore
+        .map((item) => ({
+          productId: item.productId,
+          // Negative delta so applyParcelStockPlan will add back to stock
+          delta: -Number(item.quantity || 0),
+        }))
+        .filter((x) => x.productId && Number.isFinite(x.delta) && x.delta < 0);
+
+      if (stockPlan.length > 0) {
+        const stockApplied = await applyParcelStockPlan(stockPlan);
+        if (!stockApplied.ok) {
+          return res.status(500).json({ message: 'Failed to restore stock for returned parcel' });
+        }
+      }
+    }
+
+    if (status) parcel.status = status;
+    if (paymentStatus) parcel.paymentStatus = paymentStatus;
+    if (typeof notes === 'string') parcel.notes = notes;
+
+    const saved = await parcel.save();
+    const populated = await Parcel.findById(saved._id)
+      .populate('product', 'name model category')
+      .populate('createdBy', 'username email');
+
+    res.json(populated);
   } catch (error) {
     console.error('Error updating parcel status:', error);
     res.status(500).json({ message: 'Failed to update parcel status' });

@@ -67,6 +67,10 @@ const customerSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  trackingNumber: {
+    type: String,
+    trim: true
+  },
   customDate: {
     type: Date
   }

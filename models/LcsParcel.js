@@ -31,6 +31,16 @@ const LcsParcelSchema = new mongoose.Schema(
     status: { type: String, index: true },
     codValue: { type: Number },
 
+    // Internal manual product mapping (not from LCS)
+    products: [
+      {
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+        name: { type: String, required: true },
+        quantity: { type: Number, default: 1, min: 1 },
+        notes: { type: String },
+      },
+    ],
+
     raw: { type: Object },
 
     lastSyncedAt: { type: Date },

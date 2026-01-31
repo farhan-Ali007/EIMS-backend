@@ -30,6 +30,12 @@ const parcelSchema = new mongoose.Schema(
       trim: true,
       unique: true
     },
+    barcodeValue: {
+      type: String,
+      trim: true,
+      unique: true,
+      index: true,
+    },
     address: {
       type: String,
       required: true,

@@ -1,4 +1,5 @@
 import LcsParcel from '../models/LcsParcel.js';
+import Product from '../models/Product.js';
 import { lcsPost } from '../services/lcsService.js';
 
 const pickFirst = (obj, keys) => {
@@ -147,6 +148,21 @@ export const syncLcsParcels = async (req, res) => {
   }
 };
 
+export const getLcsParcelByCn = async (req, res) => {
+  try {
+    const rawCn = String(req.params.cn || '').trim().toUpperCase();
+    if (!rawCn) return res.status(400).json({ message: 'CN number is required' });
+
+    const doc = await LcsParcel.findOne({ cn: rawCn });
+    if (!doc) return res.status(404).json({ message: 'Parcel not found' });
+
+    return res.json(doc);
+  } catch (error) {
+    console.error('Error fetching LCS parcel by CN:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 export const getLcsParcels = async (req, res) => {
   try {
     const from = toYmd(req.query?.from || req.query?.from_date);
@@ -171,6 +187,69 @@ export const getLcsParcels = async (req, res) => {
     return res.json(docs);
   } catch (error) {
     console.error('Error fetching LCS parcels:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+export const updateLcsParcelProducts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ message: 'Parcel id is required' });
+
+    const doc = await LcsParcel.findById(id);
+    if (!doc) return res.status(404).json({ message: 'Parcel not found' });
+
+    const incoming = Array.isArray(req.body?.products) ? req.body.products : [];
+    const products = incoming
+      .map((p) => ({
+        productId: p?.productId || p?._id || undefined,
+        name: typeof p?.name === 'string' ? p.name.trim() : '',
+        quantity: Number(p?.quantity || 1) || 1,
+        notes: typeof p?.notes === 'string' ? p.notes.trim() : undefined,
+      }))
+      .filter((p) => p.name);
+
+    // Build quantity maps per productId for old and new lists
+    const oldMap = new Map();
+    const newMap = new Map();
+
+    for (const p of Array.isArray(doc.products) ? doc.products : []) {
+      if (!p?.productId) continue;
+      const key = String(p.productId);
+      const qty = Number(p.quantity || 0) || 0;
+      if (!qty) continue;
+      oldMap.set(key, (oldMap.get(key) || 0) + qty);
+    }
+
+    for (const p of products) {
+      if (!p?.productId) continue;
+      const key = String(p.productId);
+      const qty = Number(p.quantity || 0) || 0;
+      if (!qty) continue;
+      newMap.set(key, (newMap.get(key) || 0) + qty);
+    }
+
+    // Apply stock adjustments: for each productId, inc stock by -(newQty - oldQty)
+    const productIds = new Set([...oldMap.keys(), ...newMap.keys()]);
+    for (const key of productIds) {
+      const oldQty = oldMap.get(key) || 0;
+      const newQty = newMap.get(key) || 0;
+      const delta = newQty - oldQty;
+      if (!delta) continue;
+
+      try {
+        await Product.findByIdAndUpdate(key, { $inc: { stock: -delta } });
+      } catch (e) {
+        console.error('Error adjusting stock for product', key, e);
+      }
+    }
+
+    doc.products = products;
+    await doc.save();
+
+    return res.json(doc);
+  } catch (error) {
+    console.error('Error updating LCS parcel products:', error);
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

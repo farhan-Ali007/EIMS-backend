@@ -2,6 +2,16 @@ import mongoose from 'mongoose';
 
 const bookPOSchema = new mongoose.Schema(
   {
+    code: {
+      type: String,
+      trim: true,
+      unique: true,
+      index: true,
+    },
+    seq: {
+      type: Number,
+      index: true,
+    },
     toName: {
       type: String,
       required: true,

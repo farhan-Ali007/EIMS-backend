@@ -27,6 +27,7 @@ import adSpendRoutes from './routes/adspend.js';
 import dispatchRecordRoutes from './routes/dispatch-records.js';
 import lcsRoutes from './routes/lcs.js';
 import lcsParcelRoutes from './routes/lcs-parcels.js';
+import purchaseBatchRoutes from './routes/purchase-batches.js';
 
 // Import middleware
 import { authenticate } from './middleware/auth.js';
@@ -86,6 +87,7 @@ app.use('/api/adspend', authenticate, adSpendRoutes);
 app.use('/api/dispatch-records', authenticate, dispatchRecordRoutes);
 app.use('/api/lcs', authenticate, lcsRoutes);
 app.use('/api/lcs-parcels', authenticate, lcsParcelRoutes);
+app.use('/api/purchase-batches', authenticate, purchaseBatchRoutes);
 
 // Serve frontend static files from Vite dist folder
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
