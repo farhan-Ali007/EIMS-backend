@@ -66,6 +66,49 @@ export const createProduct = async (req, res) => {
   }
 };
 
+// Add stock to product by barcode (for scan-based inventory increments)
+export const addProductStockByBarcode = async (req, res) => {
+  try {
+    const raw = String(req.body?.barcode || '').trim();
+    if (!raw) {
+      return res.status(400).json({ message: 'Barcode is required' });
+    }
+
+    const product = await Product.findOne({ barcode: raw });
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found for this barcode' });
+    }
+
+    const previousStock = product.stock;
+    const qtyNum = 1;
+    const newStock = previousStock + qtyNum;
+
+    product.stock = newStock;
+    await product.save();
+
+    await StockHistory.create({
+      productId: product._id,
+      type: 'stock_in',
+      quantity: qtyNum,
+      previousStock,
+      newStock,
+      reason: 'Stock added via barcode scan',
+      notes: '',
+      createdBy: req.user?.id,
+    });
+
+    res.json({
+      message: 'Stock added successfully via barcode scan',
+      product,
+      previousStock,
+      newStock,
+      quantityAdded: qtyNum,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 // Update product
 export const updateProduct = async (req, res) => {
   try {

@@ -8,7 +8,8 @@ import {
   updateProduct,
   deleteProduct,
   getProductStockHistory,
-  addProductStock
+  addProductStock,
+  addProductStockByBarcode,
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -25,5 +26,6 @@ router.put('/:id', updateProduct);
 router.delete('/:id', authorizeAdmin, deleteProduct);
 router.get('/:id/stock-history', getProductStockHistory);
 router.post('/:id/add-stock', addProductStock);
+router.post('/add-stock-by-barcode', addProductStockByBarcode);
 
 export default router;
