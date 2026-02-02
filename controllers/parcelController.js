@@ -128,7 +128,10 @@ export const getParcels = async (req, res) => {
     }
 
     if (tracking) {
-      filter.trackingNumber = { $regex: tracking, $options: 'i' };
+      filter.$or = [
+        { trackingNumber: { $regex: tracking, $options: 'i' } },
+        { barcodeValue: { $regex: tracking, $options: 'i' } },
+      ];
     }
     if (status) {
       filter.status = status;
@@ -219,7 +222,7 @@ export const getParcels = async (req, res) => {
 // Create new parcel
 export const createParcel = async (req, res) => {
   try {
-    const { productId, productsInfo, customerName, phone, trackingNumber, address, status, paymentStatus, notes, codAmount, parcelDate } = req.body;
+    const { productId, productsInfo, customerName, phone, trackingNumber, barcodeValue, address, status, paymentStatus, notes, codAmount, parcelDate } = req.body;
 
     if (!customerName || !trackingNumber || !address) {
       return res
@@ -277,14 +280,16 @@ export const createParcel = async (req, res) => {
 
     let parcel;
     try {
+      const effectiveBarcode = (barcodeValue && String(barcodeValue).trim()) || trackingNumber;
+
       parcel = await Parcel.create({
         product: primaryProductId,
         productsInfo: resolvedProductsInfo,
         phone: phone ? String(phone).trim() : '',
         customerName: customerName.trim(),
         trackingNumber,
-        // Use tracking number as the primary barcode value for now
-        barcodeValue: trackingNumber,
+        // Prefer explicit barcodeValue (e.g. EM code) if provided, otherwise fall back to tracking number
+        barcodeValue: effectiveBarcode,
         address,
         codAmount: Number.isNaN(numericCodAmount) ? 0 : numericCodAmount,
         parcelDate: parcelDate ? new Date(parcelDate) : new Date(),

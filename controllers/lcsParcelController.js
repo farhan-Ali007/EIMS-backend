@@ -103,45 +103,59 @@ const normalize = (row, now, adminId) => {
   };
 };
 
+// Internal helper to perform LCS sync for a given date range
+const performLcsSync = async ({ from, to, adminId }) => {
+  const fromYmd = toYmd(from);
+  const toYmdStr = toYmd(to);
+  if (!fromYmd || !toYmdStr) {
+    throw new Error('from and to dates are required (YYYY-MM-DD)');
+  }
+
+  const data = await lcsPost('getBookedPacketLastStatus', { from_date: fromYmd, to_date: toYmdStr });
+  const rows = extractRows(data);
+
+  const now = new Date();
+  const normalized = (Array.isArray(rows) ? rows : [])
+    .map((r) => normalize(r, now, adminId))
+    .filter(Boolean);
+
+  const byCn = new Map();
+  for (const doc of normalized) {
+    byCn.set(doc.cn, doc);
+  }
+
+  const docs = Array.from(byCn.values());
+
+  if (docs.length === 0) {
+    return { from_date: fromYmd, to_date: toYmdStr, synced: 0, source_rows: normalized.length };
+  }
+
+  const ops = docs.map((doc) => {
+    const { cn, ...rest } = doc;
+    return { updateOne: { filter: { cn }, update: { $set: { cn, ...rest } }, upsert: true } };
+  });
+
+  const result = await LcsParcel.bulkWrite(ops, { ordered: false });
+  return {
+    from_date: fromYmd,
+    to_date: toYmdStr,
+    synced: docs.length,
+    source_rows: normalized.length,
+    inserted: result.upsertedCount || 0,
+    modified: result.modifiedCount || 0,
+    matched: result.matchedCount || 0,
+  };
+};
+
 export const syncLcsParcels = async (req, res) => {
   try {
     const from = toYmd(req.body?.from || req.body?.from_date || req.query?.from || req.query?.from_date);
     const to = toYmd(req.body?.to || req.body?.to_date || req.query?.to || req.query?.to_date);
     if (!from || !to) return res.status(400).json({ message: 'Please provide from and to dates (YYYY-MM-DD)' });
 
-    const data = await lcsPost('getBookedPacketLastStatus', { from_date: from, to_date: to });
-    const rows = extractRows(data);
-
-    const now = new Date();
     const adminId = req.admin?._id;
-    const normalized = (Array.isArray(rows) ? rows : [])
-      .map((r) => normalize(r, now, adminId))
-      .filter(Boolean);
-
-    const byCn = new Map();
-    for (const doc of normalized) {
-      byCn.set(doc.cn, doc);
-    }
-
-    const docs = Array.from(byCn.values());
-
-    if (docs.length === 0) return res.json({ from_date: from, to_date: to, synced: 0, source_rows: normalized.length });
-
-    const ops = docs.map((doc) => {
-      const { cn, ...rest } = doc;
-      return { updateOne: { filter: { cn }, update: { $set: { cn, ...rest } }, upsert: true } };
-    });
-
-    const result = await LcsParcel.bulkWrite(ops, { ordered: false });
-    return res.json({
-      from_date: from,
-      to_date: to,
-      synced: docs.length,
-      source_rows: normalized.length,
-      inserted: result.upsertedCount || 0,
-      modified: result.modifiedCount || 0,
-      matched: result.matchedCount || 0,
-    });
+    const result = await performLcsSync({ from, to, adminId });
+    return res.json(result);
   } catch (error) {
     console.error('Error syncing LCS parcels:', error);
     return res.status(500).json({ message: 'Server error', error: error.message });
@@ -251,5 +265,17 @@ export const updateLcsParcelProducts = async (req, res) => {
   } catch (error) {
     console.error('Error updating LCS parcel products:', error);
     return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Backend-only auto-sync helper: sync today's LCS parcels
+export const runLcsAutoSync = async () => {
+  try {
+    const today = new Date();
+    const ymd = today.toISOString().slice(0, 10);
+    const result = await performLcsSync({ from: ymd, to: ymd, adminId: undefined });
+    console.log('[LCS Auto Sync]', result);
+  } catch (error) {
+    console.error('[LCS Auto Sync] Error:', error);
   }
 };

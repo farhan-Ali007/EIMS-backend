@@ -27,6 +27,7 @@ import adSpendRoutes from './routes/adspend.js';
 import dispatchRecordRoutes from './routes/dispatch-records.js';
 import lcsRoutes from './routes/lcs.js';
 import lcsParcelRoutes from './routes/lcs-parcels.js';
+import { runLcsAutoSync } from './controllers/lcsParcelController.js';
 import purchaseBatchRoutes from './routes/purchase-batches.js';
 
 // Import middleware
@@ -142,6 +143,12 @@ app.use((err, req, res, next) => {
 if (process.env.VERCEL !== '1') {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+
+    // Background LCS auto-sync every 1 minute (server-side only)
+    const intervalMs = 60 * 1000;
+    setInterval(() => {
+      runLcsAutoSync();
+    }, intervalMs);
   });
 }
 export default app;
