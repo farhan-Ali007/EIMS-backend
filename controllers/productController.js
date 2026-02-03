@@ -1,5 +1,6 @@
 import Product from '../models/Product.js';
 import StockHistory from '../models/StockHistory.js';
+import PurchaseBatch from '../models/PurchaseBatch.js';
 
 // Get all products
 export const getProducts = async (req, res) => {
@@ -70,6 +71,7 @@ export const createProduct = async (req, res) => {
 export const addProductStockByBarcode = async (req, res) => {
   try {
     const raw = String(req.body?.barcode || '').trim();
+    const batchId = req.body?.batchId ? String(req.body.batchId).trim() : '';
     if (!raw) {
       return res.status(400).json({ message: 'Barcode is required' });
     }
@@ -96,6 +98,43 @@ export const addProductStockByBarcode = async (req, res) => {
       notes: '',
       createdBy: req.user?.id,
     });
+
+    // Optionally attach this scan to a purchase batch
+    if (batchId) {
+      try {
+        const batch = await PurchaseBatch.findById(batchId);
+        if (batch) {
+          const items = Array.isArray(batch.items) ? batch.items : [];
+          const productIdStr = String(product._id);
+          const existing = items.find((it) => String(it.productId) === productIdStr);
+
+          const unitPrice = Number.isFinite(Number(req.body?.unitPrice))
+            ? Number(req.body.unitPrice)
+            : Number(product.originalPrice || 0) || 0;
+
+          if (existing) {
+            existing.quantity = Number(existing.quantity || 0) + qtyNum;
+          } else {
+            items.push({
+              productId: product._id,
+              quantity: qtyNum,
+              unitPrice,
+            });
+          }
+
+          batch.items = items;
+          batch.totalAmount = items.reduce(
+            (sum, it) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0),
+            0,
+          );
+
+          await batch.save();
+        }
+      } catch (batchErr) {
+        // Log but do not fail the main scan operation if batch update fails
+        console.error('Error attaching scan to purchase batch:', batchErr);
+      }
+    }
 
     res.json({
       message: 'Stock added successfully via barcode scan',
