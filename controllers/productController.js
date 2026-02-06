@@ -38,13 +38,24 @@ export const getProductById = async (req, res) => {
 // Create product
 export const createProduct = async (req, res) => {
   try {
+    // Normalize barcode: treat empty string or whitespace as "no barcode"
+    const payload = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(payload, 'barcode')) {
+      const rawBarcode = typeof payload.barcode === 'string' ? payload.barcode.trim() : payload.barcode;
+      if (!rawBarcode) {
+        delete payload.barcode;
+      } else {
+        payload.barcode = rawBarcode;
+      }
+    }
+
     // Prevent duplicate model entries
-    const existing = await Product.findOne({ model: req.body.model });
+    const existing = await Product.findOne({ model: payload.model });
     if (existing) {
       return res.status(400).json({ message: 'A product with this model already exists' });
     }
 
-    const product = new Product(req.body);
+    const product = new Product(payload);
     const newProduct = await product.save();
 
     // Create initial stock history entry
@@ -156,9 +167,22 @@ export const updateProduct = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
+    // Normalize barcode on update as well
+    const updateData = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(updateData, 'barcode')) {
+      const rawBarcode = typeof updateData.barcode === 'string' ? updateData.barcode.trim() : updateData.barcode;
+      if (!rawBarcode) {
+        // If request sends empty/whitespace barcode, do NOT touch existing barcode in DB
+        // Remove the key from the update payload so only other fields (e.g. stock) are updated
+        delete updateData.barcode;
+      } else {
+        updateData.barcode = rawBarcode;
+      }
+    }
+
     const product = await Product.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
 
