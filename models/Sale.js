@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const saleSchema = new mongoose.Schema({
+  billId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Bill'
+  },
   productId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product'

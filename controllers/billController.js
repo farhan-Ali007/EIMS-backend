@@ -191,6 +191,7 @@ export const createBill = async (req, res) => {
         const lineCommission = perUnitCommission * quantityNum;
 
         return {
+          billId: bill._id,
           productId: item.productId,
           sellerId: seller._id,
           customerId: embeddedCustomer.id,
@@ -225,7 +226,7 @@ export const createBill = async (req, res) => {
 export const updateBill = async (req, res) => {
   try {
     const billId = req.params.id;
-    const { customer, items, subtotal, discount, discountType, total, amountPaid, previousRemaining, paymentMethod, notes } = req.body;
+    const { customer, items, subtotal, discount, discountType, total, amountPaid, previousRemaining, paymentMethod, notes, sellerId } = req.body;
 
     const existingBill = await Bill.findById(billId);
     if (!existingBill) {
@@ -305,6 +306,86 @@ export const updateBill = async (req, res) => {
     existingBill.notes = notes;
 
     await existingBill.save();
+
+    // Get old commission from existing sales records before deleting them
+    const oldSellerCommissionChanges = {};
+    const oldSalesRecords = await Sale.find({ billId: existingBill._id });
+    
+    for (const sale of oldSalesRecords) {
+      const sellerIdStr = String(sale.sellerId);
+      oldSellerCommissionChanges[sellerIdStr] = (oldSellerCommissionChanges[sellerIdStr] || 0) + Number(sale.commission || 0);
+    }
+
+    // Update Sales records: delete old ones for this bill, create new ones
+    // This prevents commission duplication and ensures commission matches current bill items
+    await Sale.deleteMany({ billId: existingBill._id });
+
+    // Calculate commission changes for each seller
+    const sellerCommissionChanges = {};
+
+    if (embeddedCustomer && items && items.length > 0) {
+      // Get seller info once (like in createBill)
+      const seller = await Seller.findById(sellerId);
+      if (seller) {
+        // Prepare sales records for new items and calculate new commissions
+        const salesPromises = items.map(async (item) => {
+          const product = await Product.findById(item.productId);
+          if (!product) return null;
+
+          const quantityNum = Number(item.quantity || 0);
+          const unitPrice = Number(item.selectedPrice || 0);
+          const lineTotal = quantityNum * unitPrice;
+          const perUnitCommission = Number(seller.commissionRate || 0);
+          const lineCommission = perUnitCommission * quantityNum;
+
+          // Track commission changes per seller
+          const sellerIdStr = String(seller._id);
+          sellerCommissionChanges[sellerIdStr] = (sellerCommissionChanges[sellerIdStr] || 0) + lineCommission;
+
+          return {
+            billId: existingBill._id,
+            productId: item.productId,
+            sellerId: seller._id,
+            customerId: embeddedCustomer.id,
+            productName: item.name,
+            sellerName: seller.name,
+            customerName: embeddedCustomer.name,
+            quantity: quantityNum,
+            unitPrice,
+            total: lineTotal,
+            commission: lineCommission
+          };
+        });
+
+        const resolvedSales = await Promise.all(salesPromises);
+        const filteredSales = resolvedSales.filter(sale => sale && sale.quantity > 0 && sale.unitPrice >= 0);
+
+        if (filteredSales.length > 0) {
+          await Sale.insertMany(filteredSales);
+        }
+      }
+    }
+
+    // Update seller commissions based on the difference
+    const allSellerIds = new Set([
+      ...Object.keys(sellerCommissionChanges),
+      ...Object.keys(oldSellerCommissionChanges)
+    ]);
+
+    for (const sellerIdStr of allSellerIds) {
+      const newCommission = sellerCommissionChanges[sellerIdStr] || 0;
+      const oldCommission = oldSellerCommissionChanges[sellerIdStr] || 0;
+      const commissionDiff = newCommission - oldCommission;
+
+      if (commissionDiff !== 0) {
+        const seller = await Seller.findById(sellerIdStr);
+        if (seller) {
+          seller.commission = Number(seller.commission || 0) + commissionDiff;
+          seller.totalCommission = Number(seller.totalCommission || 0) + commissionDiff;
+          await seller.save();
+        }
+      }
+    }
 
     const populatedBill = await Bill.findById(existingBill._id)
       .populate('createdBy', 'username email')

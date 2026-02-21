@@ -1,0 +1,1968 @@
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+M&P COD   API   MANUAL  
+ 
+ 
+ 
+ 
+ 
+Document Version: 202 50 224 0 4  
+ 
+1   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Table of Contents  
+1.   Booking   ................................ ................................ ................................ .................   6  
+1.1 Insert Booking Data API   ................................ ................................ .......................   6  
+Parameters   ................................ ................................ ................................ ............   6  
+Example   ................................ ................................ ................................ ................   8  
+Result   ................................ ................................ ................................ ....................   9  
+1.2 Void Consignment API   ................................ ................................ .......................   10  
+Parameters   ................................ ................................ ................................ ..........   10  
+Example   ................................ ................................ ................................ ..............   11  
+Result   ................................ ................................ ................................ ..................   11  
+1.3 Insert Bulk Booking Data API   ................................ ................................ .............   12  
+Parameters   ................................ ................................ ................................ ..........   12  
+Example   ................................ ................................ ................................ ..............   14  
+Result   ................................ ................................ ................................ ..................   15  
+2.   Branches   ................................ ................................ ................................ .............   16  
+2.1 Get Cities   ................................ ................................ ................................ ...........   16  
+Parameters   ................................ ................................ ................................ ..........   16  
+Example   ................................ ................................ ................................ ..............   16  
+Result   ................................ ................................ ................................ ..................   16  
+2.2 Get Cities All   ................................ ................................ ................................ .....   18  
+Parameters   ................................ ................................ ................................ ..........   18  
+Example   ................................ ................................ ................................ ..............   18  
+Result   ................................ ................................ ................................ ..................   18  
+3.   Locations   ................................ ................................ ................................ .............   20  
+3.1 Get Locations   ................................ ................................ ................................ .....   20  
+Parameters   ................................ ................................ ................................ ..........   20  
+Example   ................................ ................................ ................................ ..............   20  
+Result   ................................ ................................ ................................ ..................   20  
+3.2 Add Location API   ................................ ................................ ...............................   21  
+2   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Parameters   ................................ ................................ ................................ ..........   21  
+Example   ................................ ................................ ................................ ..............   21  
+Result   ................................ ................................ ................................ ..................   22  
+3.3 Add Location with Sub Account API   ................................ ................................ ....   23  
+Parameters   ................................ ................................ ................................ ..........   23  
+Example   ................................ ................................ ................................ ..............   23  
+Result   ................................ ................................ ................................ ..................   24  
+3.4 Get Sub Account Locations   ................................ ................................ .................   25  
+Parameters   ................................ ................................ ................................ ..........   25  
+Example   ................................ ................................ ................................ ..............   25  
+Result   ................................ ................................ ................................ ..................   25  
+3.5 Create Sub Account Locations ................................ ................................ .............   26  
+Parameters   ................................ ................................ ................................ ..........   26  
+Example   ................................ ................................ ................................ ..............   26  
+Result   ................................ ................................ ................................ ..................   26  
+4.   Reports   ................................ ................................ ................................ ...............   27  
+4.1 QSR Report API   ................................ ................................ ................................   27  
+Parameters   ................................ ................................ ................................ ..........   27  
+Example   ................................ ................................ ................................ ..............   27  
+Result   ................................ ................................ ................................ ..................   28  
+4.2 Payment Report API   ................................ ................................ ..........................   29  
+Parameters   ................................ ................................ ................................ ..........   29  
+Example   ................................ ................................ ................................ ..............   29  
+Result   ................................ ................................ ................................ ..................   29  
+4.3  CN Detail Customer Order No API   ................................ ................................ .....   31  
+Parameters   ................................ ................................ ................................ ..........   31  
+Example   ................................ ................................ ................................ ..............   31  
+Result   ................................ ................................ ................................ ..................   32  
+4.5 Get Proof of Delivery   ................................ ................................ ..........................   33  
+3   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Parameters   ................................ ................................ ................................ ..........   33  
+Example   ................................ ................................ ................................ ..............   33  
+Result   ................................ ................................ ................................ ..................   33  
+5.   Shipper Advice   ................................ ................................ ................................ ....   35  
+5.1 Get Shipper Advices   ................................ ................................ ...........................   35  
+Parameters   ................................ ................................ ................................ ..........   35  
+Example   ................................ ................................ ................................ ..............   36  
+Result   ................................ ................................ ................................ ..................   36  
+5.2 Close Shipper Advice   ................................ ................................ ..........................   38  
+Parameters   ................................ ................................ ................................ ..........   38  
+Example   ................................ ................................ ................................ ..............   39  
+Result   ................................ ................................ ................................ ..................   39  
+5.3 Get Init Data API   ................................ ................................ ...............................   40  
+Parameters   ................................ ................................ ................................ ..........   40  
+Example   ................................ ................................ ................................ ..............   40  
+Result   ................................ ................................ ................................ ..................   41  
+5.4 Get Advices API   ................................ ................................ ................................ .   43  
+Parameters   ................................ ................................ ................................ ..........   43  
+Example   ................................ ................................ ................................ ..............   43  
+Result   ................................ ................................ ................................ ..................   44  
+5.5 Save Advice   ................................ ................................ ................................ .......   45  
+Parameters   ................................ ................................ ................................ ..........   45  
+Example   ................................ ................................ ................................ ..............   46  
+Result   ................................ ................................ ................................ ..................   47  
+5.6 Ticket Details   ................................ ................................ ................................ .....   48  
+Parameters   ................................ ................................ ................................ ..........   48  
+Example   ................................ ................................ ................................ ..............   48  
+Result   ................................ ................................ ................................ ..................   48  
+6.   Tracking   ................................ ................................ ................................ ..............   50  
+4   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+6.1 Consignment Tracking ................................ ................................ ........................   50  
+Parameters   ................................ ................................ ................................ ..........   50  
+Example   ................................ ................................ ................................ ..............   50  
+Result   ................................ ................................ ................................ ..................   50  
+6.2 Bulk Consignment Tracking   ................................ ................................ ................   53  
+Parameters   ................................ ................................ ................................ ..........   53  
+Example   ................................ ................................ ................................ ..............   53  
+Result   ................................ ................................ ................................ ..................   54  
+7.   User Management   ................................ ................................ ................................   57  
+7.1 Get Sub Accounts   ................................ ................................ ...............................   57  
+Parameters   ................................ ................................ ................................ ..........   57  
+Example   ................................ ................................ ................................ ..............   57  
+Result   ................................ ................................ ................................ ..................   57  
+7.2 Get Accounts   ................................ ................................ ................................ ......   58  
+Parameters   ................................ ................................ ................................ ..........   58  
+Example   ................................ ................................ ................................ ..............   58  
+Result   ................................ ................................ ................................ ..................   58  
+ 
+ 
+ 
+ 
+   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+5   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+1.   Booking  
+1 .1 Insert Booking Data API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/Booking/InsertBookingData  
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should be 
+provided by  the same   as   provided.  
+Max Length:50   M&P.  
+Should be same as  2   password   string   Password will be  12345678   ✔  
+provided.    provided by 
+Max Length:100   M&P.  
+3   consigneeName   string   Max  Length:50   Name of the  Aleeza   ✔  
+receiver to whom  
+the   shipment   will  
+be   delivered.  
+4   consigneeAddress   string   Character   limit:   255   Address where  Clifton  ✔  
+the shipment will  Karachi, 
+be  delivered.   Pakistan  
+5   consigneeMobNo   string   Mobile number  03203115 ✔   The phone number is 
+of the  receiver.   840   bound   on   this   format.  
+i.e.,   03001234567  
+6   consigneeEmail   string   Email address of  aleeza@ x   Email format should be 
+receiver.    mulphilo correct. Can be sent   
+empty but parameter  g.com  
+could not be removed.  
+Max Length: 50  
+7   destinationCityName   string   String   name   of   Karachi   ✔   Destination   City   name 
+the   city where the  should be passed as per 
+API provided by M&P.   shipment   will   be  
+Max Length:50   delivered  
+8   pieces   integer   Do not use commas or  Number   of   2   ✔  
+dots for this  parameter.    pieces   /   item(s)  
+Max is 99.  
+9   weight   double   The maximum weight on  weight of the  5.5   ✔  
+ROAD N RAIL cannot  shipment  
+exceed 9999, except for a 
+specific limit of 99.  
+6   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Do not  use commas.   10   codAmount   integer   The amount to be  100   ✔  
+Max Length:99999   collected at the 
+time of delivery.  
+11   custRefNo   string   Character   limit:   50   Shipper's   own   T - 786   ✔  
+reference   ID  
+12   productDetails   string   Character   limit:   50   Nature and  one  x  
+details of the  White t   
+item(s) in the  shirt  
+order to be  medium  
+delivered  
+13   fragile   string   Yes or No.   If a parcel is  Yes   x  
+sensitive, then   
+this needs to be 
+sent otherwise   
+Service type list or API  14   service   string   Type of service  “Overnig ✔  
+will be shared by  M&P.   required against a  ht” OR 
+Max Length:50  
+consignment  “O” 
+should be  “Second 
+declared while  Day” or 
+booking.   “S”  
+15   remarks   string    Max Length: 400    Remarks  “Parcel  x  
+provided by user   was in Ok 
+ 
+condition
+”  
+16   insuranceValue   string   0 in case no insurance or  If a product is to  1000 or 0   x  
+amount if insured   be insured. Then 
+ 
+enter the value of 
+consignment. 
+Additional 
+charges may 
+apply.  
+Location ID will be  17   locationID   string   Location ID is  04   ✔  
+provided by M&P.   provided by 
+Max Length: 10   M&P. Location 
+ID is account ID 
+thru which 
+booking is taking 
+place.  
+18   AccountNo   string   Needs to be passed as  Provided   by   4T154   ✔  
+provided by M&P .   M&P.  
+Max Length: 50  
+Insert type as shared or  19   InsertType   integer   This is for MP  19   x  
+mentioned by M&P.   usage.    
+Max Length: 6  
+7   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Correct location id as  20   ReturnLocation   string    “33”   ✔   The 
+provided by M&P   consignment’s 
+Max Length: 10   return destination 
+is returnLocation 
+(also locationID  
+but of designated 
+return branch).  
+SubAccount ID is  21   subAccountId   integer   Sub account is a  3376   ✔  
+provided by M&P   child account of   
+Max Length: 10   Account (parent).  
+Note: Username, Password, AccountNo (parent account), returnLocation,  InsertType, subAccountId and locationID 
+(sub - accounts) information will be provided by M&P.  
+ 
+Example  
+{  
+   "username": "test_user",  
+   "password": "12345",  
+   "consigneeName": "Aleeza Moazzam",  
+   "consigneeAddress": "DHA KHI",  
+   "consigneeMobNo":  "03134568904",  
+   "consigneeEmail": "aleeza@mulphilog.com",  
+   "destinationCityName": "islamabad",  
+   "pieces": 1,  
+   "weight": 1,  
+   "codAmount": 1,  
+   "custRefNo": "test_1234",  
+   "productDetails": "New Mobile",  
+   "fragile": "YES",  
+   "service": "Overnight",  
+   "remarks": "Call Before Delivery",  
+   "insuranceValue": "0",  
+   "locationID": "41",  
+   "AccountNo": "4T154",  
+   "InsertType": 19,  
+   "ReturnLocation": 41,  
+8   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+   "subAccountId": 2  
+}  
+   
+Result  
+[  
+   {  
+     "isSuccess": "true",  
+     "message": "Order saved successfully!",  
+     "orderReferenceId": "544794010101495"  
+   }  
+]  
+   
+9   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+1.2   Void Consignment API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/Booking/VoidConsignment  
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   Username   string   Username will  Test user   ✔   Username   should be 
+be provided by  exactly the same   as  
+provided.   M&P.  
+Max Length:50  
+Should be same as  2   password   string   Password will  12345678   ✔  
+provided.    be provided by 
+Max Length:100   M&P.  
+Location ID will be  3   LocationID   string   Location ID is  04   ✔  
+provided by M&P.   provided by 
+Max Length: 10   M&P. Location 
+ID is account ID 
+thru which 
+booking is 
+taking place.  
+The below parameters will be in a List  
+4   consignmentNumberList   string   Max Length:50   Consignment  544008513 ✔  
+number which  645785  
+needs to be 
+tracked by the 
+customer. It is 
+provided in 
+single or bulk 
+booking APIs.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+10   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Example  
+{  
+   "Username": "test_user",  
+   "password": "12345",  
+   "locationID": "41",  
+   "consignmentNumberList": [  
+     "544794010101495",  
+"544794010101502",  
+   ]  
+}  
+ 
+Result  
+[  
+   {  
+     "isSuccess": true,  
+     "message": "Succes, Details in List",  
+     "orderReferenceIdList": [  
+       {  
+         "consignmentNumber": "544794010101495",  
+         "success": true,  
+         "message": "CN marked void"  
+       },  
+       {  
+         "consignmentNumber": "544794010101502",  
+         "success": true,  
+         "message": "CN marked void"  
+       }  
+     ]  
+   }  
+]  
+   
+11   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+1.3   Insert Bulk Booking Data API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/Booking/InsertBulkBookingData  
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will  Test user   ✔   Username   should be 
+be provided by  the same   as   provided.  
+Max Length:50   M&P.  
+Should be same as  2   password   string   Password will  12345678   ✔  
+provided.    be provided by 
+Max Length:100   M&P.  
+3   locationID   string   Location ID will be  Location ID is  04   ✔  
+provided by M&P   provided by 
+M&P. Location 
+ID is account ID 
+thru which 
+booking is 
+taking place.  
+4   InsertType   integer   Insert type will be provided  This is for MP  19   x  
+by M&P   usage.  
+The parameters below will be in a List  
+7   id   integer   Do not use commas.   ID number of the  1   ✔  
+receiver  
+8   consigneeName   string   Character   limit:   50   Name of the  Aleeza   ✔  
+receiver to 
+whom   the  
+shipment   will   be  
+delivered.  
+9   consigneeAddress   string   Character   limit:   255   Address where  Clifton  ✔  
+the shipment  Karachi, 
+will be  Pakistan  
+delivered.  
+10   consigneeMobNo   string   Mobile number  03203115 ✔   The phone  number is bound  
+of the  receiver.   840   on   this   format.   i.e.,  
+03001234567  
+Max Length: 50  
+ 
+12   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+11   consigneeEmail   string   Email address of  aleeza@ x   Email format should be 
+receiver.    mulphilo correct. Can be sent empty 
+but parameter cannot be  g.com  
+removed.  
+Max Length: 50  
+12   destinationCityName   string   String   name   of   Karachi   ✔   Destination   City   name 
+the   city where  should be passed as per API 
+provided by M&P.   the shipment  
+Max Length:50   will   be   delivered  
+13   pieces   integer   Do not use commas or dots  Number   of   2   ✔  
+for this  parameter. Max is  pieces/item  (s)  
+99.  
+14   weight   double   The maximum weight on  weight   of   the   5.5   ✔  
+ROAD N RAIL cannot  shipment  
+exceed 9999, except for a 
+specific limit of 99.  
+15   codAmount   double   The amount to  100   ✔   Do not use commas.  
+be collected at  Max Amount: 99999  
+the time of 
+delivery.  
+16   custRefNo   string   Shipper's   own   T - 786   ✔   Character   limit:   100  
+reference   ID   Length:50  
+17   productDetails   string   Character   limit:   600   Nature and  one  x  
+details of the  White t 
+item(s) in the  shirt  
+order to be  medium  
+delivered  
+18   fragile   string   Yes or No.   If a parcel is  Yes   x  
+sensitive, then 
+this needs to be 
+sent otherwise   
+19   service   string   Type of service  “Overnig ✔   Service type list or API will 
+required against  ht” OR  be shared by  M&P.    
+Length:50   a consignment  “O” 
+should be  “Second 
+declared while  Day” or 
+booking.   “S”  
+20   remarks   string    Should be less than 200  Remarks  “Parcel  x  
+characters.   provided by user   was in 
+  Ok 
+condition
+”  
+21   insuranceValue   string   0 in case no insurance or  If a product is to  1000 or 0   x  
+amount if insured   be insured. Then 
+13   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+enter value of 
+consignment. 
+Additional 
+charges may 
+apply.  
+Note: Username, Password, AccountNo   (parent account), returnLocation, InsertType, subAccountId and locationID 
+(sub - accounts) information will be provided by M&P.  
+ 
+Example  
+{  
+   "username": "test_user",  
+   "password": "12345",  
+   "locationID": "41",  
+   "InsertType": 19,  
+   " BulkConsignmentList": [  
+     {  
+       "id": 1,  
+       "consigneeName": "Aleeza Moazzam",  
+       "consigneeAddress": "KHI - Korangi",  
+       "consigneeMobNo": "03136758493",  
+       "consigneeEmail": "aleeza@mulphilog.com",  
+       "destinationCityName": "Lahore",  
+       "pieces": 1,  
+       "weight": 0.7,  
+       "codAmount": 1,  
+       "custRefNo": "896582594",  
+       "productDetails": "dress",  
+       "fragile": "NO",  
+       "service": "Overnight",  
+       "remarks": "test - order",  
+       "insuranceValue": "0"},  
+     {  
+       "id": 2,  
+       "consigneeName": "Amjad Ahmed",  
+       "consigneeAddress": "KHI - DHA",  
+14   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+       "consigneeMobNo": "03134378921",  
+       "consigneeEmail": "amjad.ahmed@mulphilog.com",  
+       "destinationCityName": "Lahore",  
+       "pieces": 1,  
+       "weight": 0.5,  
+       "codAmount": 1,  
+       "custRefNo": "896532194",  
+       "productDetails": "Cloths",  
+       "fragile": "NO",  
+       "service": "Overnight",  
+       "remarks": "test - order",  
+       "insuranceValue": "0"}  
+   ]  
+}  
+Result  
+[  
+   {  
+     "isSuccess": true,  
+     "message": "Success; Details can be seen in OrderReferenceList",  
+     "orderReferenceIdList": [  
+       {  
+         "orderRefNum": "896582594",  
+         "success": true,  
+         "message": "544794010101498"  
+       },  
+       {  
+         "orderRefNum": "896532194",  
+         "success": true,  
+         "message": "544794010101499"  
+       }  
+     ]  
+   }  
+]  
+15   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+2.   Branches  
+2 .1 Get Cities  
+  This API is used to retrieve cities for booking.  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/Branches/Get_Cities      
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should be 
+provided by M&P.   the same   as   provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   AccountNo   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+ 
+Example  
+ 
+Result  
+[  
+   {  
+     "City": [  
+       "ABDUL HAKIM /TULAMBA",  
+       "ALI ABAD ",  
+       "ALI PUR",  
+       "ALI PUR CHATTA",  
+       "ALIABAD JAMALI",  
+16   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+       "ATTOCK",  
+       "BAIJI CHOWK ",  
+       "BAKHEERA ",  
+       "BANGAL DERO",  
+]  
+   }  
+]  
+   
+17   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+2 .2 Get Cities All  
+This API is used to retrieve cities for  delivery .  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/Branches/Get_Cities_All  
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be provided  Test user   ✔   Username   should be 
+by M&P.   exactly the same   as  
+provided.  
+Max Length:50  
+Should be same as provided.    2   password   string   Password will be provided  12345678   ✔  
+Max Length:100   by M&P.  
+3   AccountNo   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+ 
+Example  
+ 
+Result  
+[  
+   {  
+     "City": [  
+       "ABDUL HAKIM /TULAMBA",  
+       "ABOTTABAD",  
+       "AHMED PUR EAST",  
+       "Airport",  
+       "ALI PUR",  
+       "ALI PUR CHATTA",  
+       "ARIF WALA",  
+18   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+       "ATTOCK",  
+       "Awan Town Lahore",  
+       "BADIN",  
+       "bannu",  
+]  
+    }  
+]  
+   
+19   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+3.   Locations  
+3 .1 Get  Locations  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/Locations/Get_locations  
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should be 
+provided by M&P.   exactly the same   as  
+provided.  
+Max Length:50  
+Should be same as provided.    2   password   string   Password will be  12345678   ✔  
+Max Length:100   provided by M&P.  
+3   AccountNo   string   Needs to be passed as provided  Provided   by   M&P.   4T154   ✔  
+by M&P .  
+Max Length: 50  
+ 
+Example  
+Result  
+{  
+   "isSucces": true,  
+   "message": "Success",  
+   "locationList": [  
+     {  
+       "locationID": 88,  
+       "locationName": "Zaib  Tann Zaib Tann FSD",  
+       "locationAddress": "P - 1115 Mansoorabad Canal Road Faisalabad"  
+     }  
+20   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+3 .2 Add Location API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/Locations/AddLocation  
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   userId   string   Username will be provided  Test user   ✔   Username   should be 
+by M&P.   the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be provided  12345678   ✔  
+provided.    by M&P.  
+Max Length:100  
+3   accountNo   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+  branchCode   integer   Max Length:50   T he  numeric code  1   ✔  
+representing the branch.  
+  locationName   string   Max Length:50   Enter the name of the  Sadar   ✔  
+location within the branch.  
+  locationAddress   string   Character   limit:   255   Provide the full address of  Atrium  ✔  
+the location.   Sadar  
+The below  parameters will be in a List  
+1   to   string   -   -   null   x  
+The below parameters will be in a List  
+1   cc   string   -   -   null   x  
+Example  
+{  
+   "userId": "test_user",  
+   "password": "12345",  
+   "accountNo": "4T154",  
+   "branchCode": 1,  
+   "locationName": "Sadar",  
+   " locationAddress": "Atrium sadar ",  
+   "to": [  
+     "string"  
+21   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+   ],  
+   "cc": [  
+     "string"  
+   ]  
+}  
+ 
+Result  
+{  
+   "status": true,  
+   "msg": "Location #74156 Created Successfully",  
+   "id": 74156  
+}  
+   
+22   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+3 . 3   Add Location  with Sub Account  API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/Locations/AddLocationWithSubAccount  
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   userId   string   Username will be  provided  Test user   ✔   Username   should be 
+by M&P.   the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be provided  12345678   ✔  
+provided.    by M&P.  
+Max Length:100  
+3   accountNo   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+Karachi   4   branchName   integer   Max Length:50   Enter the full name of the  ✔  
+branch.  
+KHI - DHA   5   locationName   string   Max Length:50   Enter the name of the  ✔  
+location within the branch.  
+phase 2   6   locationAddress   string   Character   limit:   255   Provide the full address of  ✔  
+the location.  
+The below parameters will be in a List  
+1   to   string   -   -   null   x  
+The below parameters will be in a List  
+1   cc   string   -   -   null   x  
+56790   7   SubAccountID   integer   Max Length: 10   Enter your sub account ID.    ✔  
+ 
+Example  
+{  
+   "userId": " Test_user",  
+   "password": "12345",  
+   "accountNo": "4T154",  
+   "branchName": "Karachi",  
+   "locationName": "KHI - DHA",  
+   "locationAddress": "phase 2",  
+   "to": [  
+23   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+     ""  
+   ],  
+   "cc": [  
+     ""  
+   ],  
+   "SubAccountID": 56790  
+}  
+Result  
+{  
+   "status": true,  
+   "msg": "Location #77524 Created Successfully",  
+   "id": 77524  
+}  
+   
+24   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+3 . 4   Get Sub Account Locations  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/Locations/GetSubAccountLocations  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should be 
+provided by M&P.   the same   as   provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+SubAccount ID is  3   SubAccountId   string     Sub account is a child  3376  
+provided by M&P   account of Account  x  
+Max Length: 10   (parent).  
+Example  
+ 
+Result  
+{  
+   "isSucces": true,  
+   "message": "Success",  
+   "locationList": [  
+     {  
+       "locationID": 33130,  
+       "locationName": "33130  -   Test by bilal",  
+       "locationAddress": "Faisalabad DHA"  
+     }  
+   ]  
+}  
+25   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+3 . 5   Create   Sub Account Locations  
+The method Type is  POST  
+          https://mnpcourier.com/mycodapi/api/Locations/CreateSubAccount  
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   Username   string   Username will be  Test  user   ✔   Username   should be 
+provided by M&P.   the same   as   provided.  
+Max Length:50  
+Should be same as  2   Password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   AccountNo   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+Aleeza   Max Length:50   4   ShipperName   string   N ame of the person or  ✔  
+company sending the 
+shipment.  
+KHi - DHA   Character   limit:   255   5   ShipperAddress   string   Provide the full address  ✔  
+of the shipper.  
+_   6   AutoCN   boolean   Set to true if the  True   ✔  
+consignment number is 
+generated automatically, 
+otherwise false.  
+Example  
+{  
+   "Username": "test_user",  
+   "Password": "12345",  
+   "AccountNo": "4T154",  
+   "ShipperName": "Aleeza",  
+   "ShipperAddress": "KHi - DHA",  
+   "AutoCN": true  
+}  
+Result  
+{  
+   "isSucces": true,  
+26   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+   "message": "Success",  
+   "subAccountDetail": {  
+     "SubAccountId": 56790,  
+     "ShipperName": "Aleeza",  
+     "ShipperAddress": "KHi - DHA" }}  
+4.   Reports  
+4 .1 QSR Report API  
+The method Type is POST  
+  https://mnpcourier.com/mycodapi/api/Reports/QSR_Report  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   UserName   string   Username will be  Test  user   ✔   The username   should 
+provided by M&P.   be the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   Password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   MonthNumber   integer   Ranging from 1 - 12   Kindly send proper  1   ✔  
+month.  
+4   Year   integer   Ranging from 2017 - Kindly send proper Year   2025   ✔  
+2025(CurrentDate's year)  
+5   locationID   string   Location ID will be  Location ID is provided  04   ✔  
+provided by M&P   by M&P. Location ID is 
+account ID thru which 
+booking is taking place.  
+ 
+Example  
+{  
+   "UserName": " test_user ",  
+   "Password": "12345",  
+   "MonthNumber": 11,  
+   "year": 2024,  
+27   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+   "locationID": "29609"  
+}  
+ 
+ 
+ 
+Result  
+[  
+   {  
+     "isSuccess": true,  
+     "message": "Success",  
+     "AccountNumber": " 4T154 ",  
+     "ClientName": "JADE E SERVICES PAKISTAN PVT. LTD.",  
+     "Details": [  
+       {  
+         "consignmentNumber": "547306411236930",  
+         "BookingDate": "02 Nov 2024",  
+         "OrgZone": "KHI",  
+         "OrgBranch": "KHI",  
+         "consignee": "Zahid Ahmed",  
+         "orderRefNo": "1.98488E+14",  
+         "SERVICE": "Return Service",  
+         "DESTZONE": "KHI",  
+         "DESTINATION": "KHI",  
+         "WEIGHT": 0.08,  
+         "receivedBy": "M.FAIZAN",  
+         "TIME": "12:00:00",  
+         "deliveryDate": "09 Nov 2024",  
+         "CODAmount": 2464,  
+         "PaymentMode": "COD",  
+         "RRStatus": "RS - Return to Shipper",  
+         "CHEQUENO": null  
+       },  
+]  
+28   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+      4.2   Payment   Report API  
+The method Type is POS T  
+  https://mnpcourier.com/mycodapi/api/Reports/Payment_Report  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   UserName   string   Username will be  Test user   ✔   Username   should be the 
+provided by M&P.   same   as   provided.  
+Max Length:50  
+Should be same as provided.    2   Password   string   Password will be  12345678   ✔  
+Max Length:100   provided by M&P.  
+2024 - 11 - 3   dateFrom   integer   S hould be less than To Date   Enter   p roper From Date   ✔  
+02   MAX Days Limit is 31 Days  
+2024 - 1 2 - 4   dateTo   integer   MAX Days Limit is 31 Days   Enter proper   To Date   ✔  
+02  
+5   locationID   string   Location ID will be provided  Location ID is provided  04   ✔  
+by M&P   by M&P. Location ID is 
+account ID thru which 
+booking is taking place.  
+ 
+Example  
+{  
+   "UserName": " test_ user ",  
+   "Password": "12345",  
+   "dateFrom": "2024 - 11 - 02T10:22:41.861Z",  
+   "dateTo":  "2024 - 11 - 02T10:22:41.861Z",  
+   "locationID": "29609"  
+}  
+ 
+Result  
+[  
+   {  
+     "isSuccess": true,  
+     "message": "Success",  
+29   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+     "ZoneName": "KHI",  
+     "BranchName": "KHI  -   KARACHI",  
+     "CreditClientID": 367888,  
+     "AccountNo": "4J24",  
+     " AcccountName": "JADE E SERVICES PAKISTAN Pvt. Ltd.",  
+     "BeneficiaryName": "JADE E - SERVICES PAKISTAN (PRIVATE)",  
+     "BeneficiaryBankAccount": "PK37SCBL0000001725076001",  
+     "BankName": "Standard Chartered Bank (Pakistan) Limited ",  
+     "sbpcode": "038",  
+     "Details": [  
+       {  
+         "serial_no": 1,  
+         "PaymentID": "20241182600",  
+         "PaidOn": "2024 - 11 - 02T00:16:38.697",  
+         "RRAmount": 754,  
+         "InvoiceAmount": 0,  
+         "NetPayable": 754,  
+         "InstrumentMode": "IBFT",  
+         "InstrumentNumber": "2775822148001102"  
+       },  
+       {  
+         "serial_no": 2,  
+         "PaymentID": "20241182600",  
+         "PaidOn": "2024 - 11 - 02T00:16:38.697",  
+         "RRAmount": 733,  
+         "InvoiceAmount": 0,  
+         "NetPayable": 733,  
+         " InstrumentMode": "IBFT",  
+         "InstrumentNumber": "2775822148001102"  
+       },  
+]  
+30   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+4.3  CN   Detail Customer Order No API  
+The method Type is POS T  
+  https://mnpcourier.com/mycodapi/api/Reports/CN_Detail_Customer_Order_No  
+        
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   UserName   string   Username will be  Test user   ✔   Username   should 
+provided by M&P.   be exactly the 
+same   as   provided.  
+Max Length:50  
+Should be same as  2   Password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   CustomerOrderRef   string     Character   limit:   50           Shipper's   own   reference   T - 786   ✔  
+ID  
+4   AccountNumber   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+ 
+Example  
+{  
+   "UserName": " test_user ",  
+   "Password": "12345",  
+   "CustomerOrderRef": "1.9873E+14",  
+   "AccountNumber": "4 T154 "  
+}  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+31   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Result  
+[  
+   {  
+     "isSuccess": true,  
+     "message": "Success",  
+     "Details": [  
+       {  
+         "consignmentNumber": "547306411236984",  
+         "consignee": "Ayesha Ishtiaq",  
+         "address": "House No L25Bq7392Street 02 Gulshanport Qasim, Karachi  Landhi, Future Colony, 
+3102180500",  
+         "consigneePhoneNo": "3102180500",  
+         "weight": 0.2,  
+         "pieces": 1,  
+         "ServiceType": "Overnight",  
+         "DestinationCity": "KARACHI",  
+         "CODAmount": 684,  
+         "CustomerOrderNo": "1.9873E+14",  
+         " productDescription": "",  
+         "consigner": "JADE E SERVICES PAKISTAN Pvt. Ltd.",  
+         "consignerAccountNo": " 4T154 "  
+       },  
+]  
+   
+32   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+4.5  Get Proof of Delivery  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/Reports/GetProofOfDelivery  
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test  user   ✔   Username   should 
+provided by M&P.   be the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   consignmentNumber   string   Max 200  Consignment number  54479401 ✔  
+consignments   which needs to be  0537894  
+tracked by the 
+customer. It is 
+provided in single or 
+bulk booking APIs.  
+ 
+Example  
+ 
+Result  
+{  
+   "isSuccess": true,  
+   "proofOfDeliveryList": {  
+     "LastAttemptDate": "11/06/2024 18:45:21",  
+     "CurrentLocation": "KARACHI",  
+     "DeliveryStatus": "DELIVERED",  
+33   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+     "DeliveryReason":  "D - DELIVERED",  
+     "ReceivedBy": "Waqar ",  
+     "Relation": "Self",  
+     "DeliveryAttempts": 1,  
+     "Latitude": 0,  
+     "Longitude": 0,  
+     "SignatureImage": "https://mraabta1.mulphilog.com.pk/SignImage/547306411237030.jpg",  
+     "SupportingImage": "https://mraabta1.mulphilog.com.pk/CnImage/547306411237030.jpg"  
+   },  
+   "message": "Success"  
+}  
+   
+34   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+5.   Shipper Advice  
+5 .1 Get Shipper Advices  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/ShipperAdvice/GetShipperAdvices    
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should 
+provided by M&P.   be the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   Accountno   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+4   reportcheckbox   string   S hould be 0  for active  For active or close  0   ✔  
+advices   and  1 for close  advice   
+advices.   
+5   cn   string   Max 200 consignments   Consignment number  5447940 x  
+which needs to be  1053789  
+tracked by the customer.  4  
+It is provided in single 
+or bulk booking APIs.  
+6   StartDate   string   S hould be less than To  Start date of the required  2024 - 11 - x  
+Date   data.    26    
+MAX Days Limit is 31 
+Days  
+7   EndDate   string   MAX Days Limit is 31  End date of the required  2025 - 01 - x  
+Days   data.    26    
+35   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+ 
+Example  
+ 
+Result  
+[  
+   {  
+     " isSuccess": true,  
+     "message": "Success",  
+     "AccountNumber": "4J24",  
+     "ClientName": "JADE E SERVICES PAKISTAN PVT. LTD.",  
+     "Details": [  
+       {  
+         "SNo": 1,  
+         "CONSIGNMENTNUMBER": "547306411748038",  
+         "BOOKINGDATE": "14 Nov 2024",  
+         "TICKETNO": "9678412",  
+         "TICKETDATE": "04 Dec 2024",  
+         "CREATEDON": "2024 - 12 - 04T17:42:22.04",  
+         "DESTINATIONBRANCH": "SIALKOT",  
+         "PENDINGREASON": "Non Service Area",  
+         "STANDARDNOTE": "Village/Rural area",  
+         "CALLSTATUS": "Advised for Re - Attempt",  
+         "KPI": "6:20",  
+         "ADDITIONALREMARKS": "",  
+         "OrderRefNo": "200221416749163",  
+36   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+         "Comment": "",  
+         "": " - 1060"  
+       },  
+       {  
+         "SNo": 2,  
+         "CONSIGNMENTNUMBER": "547306411748237",  
+         "BOOKINGDATE": "14 Nov 2024",  
+         "TICKETNO": "9683692",  
+         "TICKETDATE": "05 Dec 2024",  
+         "CREATEDON": "2024 - 12 - 05T12:44:04.633",  
+         "DESTINATIONBRANCH": "SIALKOT",  
+         "PENDINGREASON": "Refused to Received",  
+         "STANDARDNOTE": "Order cancelled",  
+         "CALLSTATUS": "Phone not Responding",  
+         "KPI": "6:20",  
+         "ADDITIONALREMARKS": "",  
+         "OrderRefNo": "200239219245703",  
+         "Comment": "",  
+         "": "380"  
+       },  
+]  
+   
+37   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+5 .2 Close Shipper Advice  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/ShipperAdvice/CloseShipperAdvice    
+ 
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should be 
+provided by M&P.   the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be  1234567 ✔  
+provided.    provided by M&P.   8  
+Max Length:100  
+3   accountno   string   Needs to be  passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+4   consignment   string   Max 200 consignments   Consignment number  5447940 ✔  
+which needs to be  1053789
+tracked by the  4  
+customer. It is provided 
+in single or bulk 
+booking APIs.  
+5   adviceoption   integer   Enter 1 for  “ hold for  Advice for next action  2   ✔  
+further advice ”,   2 for  for shipment    
+“ Return the Shipment ” , 
+3 for  “ Re - Attempt ”    
+6   reattempt   integer   1 if  “ Re - Attempt On  Advice for re - attempt   3   x  
+Same Address ”,   2 if   
+“ Re - Attempt on New 
+Address ”,  
+3 if  “ Hold In  Office, 
+Consignee will Collect ”   
+4 if  “ Re - Attempt as 
+Reason is fake ”  
+7   remarks   string   Max Length: 400    Remarks provided by  “Parcel  x  
+user   was in   
+Ok 
+conditio
+n”  
+38   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+8   consigneeaddress   string   Character   limit:   255   Address where the  Clifton  x  
+shipment will be  Karachi,   
+delivered.   Pakistan  
+9   consigneeno   string   Mobile number of the  0320311 x   The phone number is 
+receiver.   5840   bound   on   this   format.    
+i.e.,   03001234567  
+ 
+Example  
+ 
+Result  
+[  
+   {  
+     "isSuccess": true,  
+     "message": "Success"  
+   }  
+]  
+   
+39   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+5 .3 Get Init Data   API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/ShipperAdvice/GetInitData  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   Type   integer   Type should be 1    Enter the request type as a  1   ✔  
+numeric value (e.g., 1 for 
+standard query).  
+2   AccountNo   string   Needs to be  Provided   by   M&P.   4T154   ✔  
+passed as 
+provided by 
+M&P .  
+Max Length: 50  
+3   From   string   S hould be less  Start date of the required  2024 - 11 - 26   x  
+than To Date   data.     
+MAX Days Limit 
+is  31 Days  
+4   To   string   MAX Days Limit  End date of the required  2025 - 01 - 26   x  
+is 31 Days   data.     
+5   CN   string   Max 200  Consignment number  544794010537894   ✔  
+consignments   which needs to be tracked 
+by the customer. It is 
+provided in single or bulk 
+booking APIs.  
+ 
+Example  
+{  
+    "Type": 1,  
+    "AccountNo": "4J24",  
+    "From": "2024 - 09 - 20T06:10:57.260Z",  
+    "To": "2024 - 09 - 20T06:10:57.260Z",  
+    "CN": "547306411235807"  
+}  
+40   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Result  
+{  
+        "sts": 0,  
+        "calltracks": [  
+                {  
+                        "Value": "2",  
+                        "Text": "Return the Shipment",  
+                        "_Value": 2  
+                },  
+                {  
+                        "Value": "3",  
+                        "Text": "Re - Attempt",  
+                        "_Value": 3  
+                }  
+        ],  
+        "reattempts": [  
+                {  
+                        "Value": "1",  
+                        "Text": "Re - Attempt on Same Address",  
+                        "_Value": 1  
+                },  
+                {  
+                        "Value": "2",  
+                        "Text": "Re - Attempt on New Address",  
+                        "_Value": 2  
+                },  
+                {  
+                        "Value": "3",  
+                        "Text": "Hold in Office, Consignee will Collect",  
+                        "_Value": 3  
+                },  
+                {  
+                        "Value": "4",  
+41   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+                        "Text": "Re - Attempt as Reason is Fake",  
+                        "_Value": 4  
+                }  
+        ],  
+        "advices": []  
+}  
+   
+42   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+5 .4 Get Advices   API  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/ShipperAdvice/GetAdvices  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   Type   integer   Type should be 1    Enter the request type as a   1   ✔  
+numeric value (e.g., 1 for 
+standard query).  
+2   AccountNo   string   Needs to be  Provided   by   M&P.   4T154   ✔  
+passed as 
+provided by 
+M&P .  
+Max Length: 50  
+3   From   string   S hould be less  Start date of the required  2024 - 11 - 26   x  
+than To Date   data.     
+MAX Days Limit 
+is 31 Days  
+4   To   string   MAX Days Limit  End date of the required  2025 - 01 - 26   x  
+is 31 Days   data.     
+5   CN   string   Max 200  Consignment number  544794010537894   ✔  
+consignments   which needs to be tracked 
+by the customer. It is 
+provided in  single or bulk 
+booking APIs.  
+ 
+Example  
+{  
+    "Type": 1,  
+    "AccountNo": "4J24",  
+    "CN": "547306412150923"  
+}  
+ 
+ 
+43   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Result  
+{  
+        "sts": 0,  
+        "data": [  
+                {  
+                        "CN": "547306412150923",  
+                        "BookingDate":  "05 - Feb - 2025",  
+                        "TicketNo": "10101274",  
+                        "TicketDate": "12 - Feb - 2025",  
+                        "CreatedOn": "2025 - 02 - 12T08:16:26.027",  
+                        "DestinationBranch": "BHIMBER",  
+                        "PendingReason": "Refused to Received",  
+                        "StandardNote": "Order cancelled",  
+                        "CallStatus": "Refused, Advised for Return",  
+                        "AdditionalRemarks":  null ,  
+                        "KPI": "5:32",  
+                        "OrderRefNo": "209270304828052",  
+                        "Comments": "",  
+                        "Consignee": "zain shahbaz",  
+                        "ConsigneeContact": "03556181950",  
+                        "ConsigneeAddress": "Samahni, District bhimber PO samahni tashil samahni chahi Azad 
+Kashmir  \ nAzad Kashmir bhimber samahni, Pakistan",  
+                        "TempAdvice": 1,  
+                        "Advice": 0,  
+                        "ReattemptReason": 0,  
+                        "CreatedBy": 0,  
+                        "CallTrackName":  null ,  
+                        "CodAmount": 698.0,  
+                        "ShowDetail":  false ,  
+                        "CNStatus": "UNDELIVERED"  
+                }  
+        ] }  
+44   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+5 .5 Save Advice  
+The  method Type is POST  
+          https://mnpcourier.com/mycodapi/api/ShipperAdvice/SaveAdvice  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   CN   string   Max 200  Consignment number  5447940105 ✔  
+consignments   which needs to be tracked  37894  
+by  the customer. It is 
+provided in single or bulk 
+booking APIs.  
+10 - 01 - 2023   2   BookingDate   string     D ate when the shipment  ✔  
+was booked  
+10157946    3   TicketNo   string     T he support or issue ticket  ✔  
+number.  
+20 - Feb - 2025   4   TicketDate   string     date the  ticket was created  ✔  
+(format: DD - MMM -
+YYYY).  
+2024 - 12 - 5   CreatedOn   string     System - generated  ✔  
+04T17:42:22. timestamp of record 
+04   creation (ISO format).  
+6   DestinationBranch   string   Max   String   name   of   the   branch   Karachi   ✔  
+Length:50   where the shipment   will   be  
+delivered  
+7   PendingReason   string     Specify why the delivery  Consignee  ✔  
+is pending.   not 
+Available  
+8   StandardNote   string     standard reason or note for  Consignee  ✔  
+non - delivery.   out of City  
+9   CallStatus   string     Mention the outcome of  Advised for  ✔  
+the follow - up call.   Re - Attempt  
+10   AdditionalRemarks   string     Add any extra comments  null   ✔  
+or write null if none.  
+11   KPI   string     KPI value indicating  24:4   ✔  
+performance metrics 
+(format: X:Y).  
+ED - 620055   12   OrderRefNo   string   Character   Enter the order reference  ✔  
+limit:   50   number.  
+45   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+13   Comments   string     A ny custom comments or  null   ✔  
+leave blank if not 
+applicable.  
+14   Consignee   string   Character   Amjad   ✔   Enter the name of 
+limit:   50   the recipient.  
+15   ConsigneeContact   string   Enter contact number of  null   ✔   The phone 
+consignee or write null if  number is 
+bound   on   this   unknown.  
+format.   i.e.,  
+03001234567  
+Max Length: 
+50  
+ 
+16   ConsigneeAddress   string   Character   Address where the  Multan,Punj ✔  
+limit:   255   shipment will be  delivered   ab,60000  
+17   TempAdvice   integer     Numeric code for  1   ✔  
+temporary advice status 
+(usually 1 for Yes, 0 for 
+No).  
+18   Advice   integer     Enter advice code (based  3   ✔  
+on internal reattempt or 
+escalation logic).  
+19   ReattemptReason   integer     N umeric reason code for  1   ✔  
+re - attempt.  
+20   CreatedBy   integer     U ser ID who created the  0   ✔  
+record or 0 if system 
+generated.  
+21   CallTrackName   string   Character   N ame of the person  null   x  
+limit:   50   handling the call or null if   
+not available.  
+22   CodAmount   integer   Enter the COD (Cash on  0   x   Do not use 
+Delivery) amount. Use 0 if  commas.    
+Max Amount:  not applicable.  
+99999  
+23   ShowDetail   Boolean     Boolean field to show  true   x  
+detailed view  (true/false).    
+24   CNStatus   string     Enter the current status of  null   x  
+the consignment.    
+ 
+Example  
+{  
+    "CN": "544794010071409",  
+    "BookingDate": "10 - 01 - 2023",  
+46   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+    "TicketNo": "10157946 ",  
+    "TicketDate": "20 - Feb - 2025",  
+    "CreatedOn":  "2025 - 02 - 20T05:10:11.006Z",  
+    "DestinationBranch": "MULTAN",  
+    "PendingReason": "Consignee not Available",  
+    "StandardNote": "Consignee out of City",  
+    "CallStatus": "Advised for Re - Attempt",  
+    "AdditionalRemarks": "null",  
+    "KPI": "24:4",  
+    "OrderRefNo": "ED - 620055",  
+    "Comments": "",  
+    "Consignee": "Falak Naz",  
+    "ConsigneeContact": "null",  
+    "ConsigneeAddress": "House no 182, Street Baba Barnay Wali, Near Police Station Haram Gate, 
+Multan.,Multan,Punjab,60000",  
+    "TempAdvice": 1,  
+    "Advice": 3,  
+    "ReattemptReason": 1,  
+    "CreatedBy": 0,  
+    "CallTrackName": "null",  
+    "CodAmount": 0,  
+    "ShowDetail":  true ,  
+    "CNStatus": "string"  
+}  
+ 
+ 
+Result  
+{  
+        "sts": 0,  
+        "msg": "Advice update successfully"  
+}  
+ 
+ 
+47   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+5 .6 Ticket Details  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/ShipperAdvice/TicketDetails  
+        
+Parameters  
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   cn   string   Max 200 consignments   Consignment number  544794010537894   ✔  
+which needs to be 
+tracked by the 
+customer. It is  provided 
+in single or bulk 
+booking APIs.  
+ 
+Example  
+ 
+Result  
+{  
+        "sts": 0,  
+        "data": [  
+                {  
+                        "Status":  null ,  
+                        "TicketNo": "10171832",  
+                        "Reason": "Refused to Received",  
+48   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+                        " CallStatus": "Refused, Advised for Return",  
+                        "CallTime": "16:18:00",  
+                        "CallTrack": "Hold for further Advice",  
+                        "Comments": "refused",  
+                        "Consignee": "shahzad ali",  
+                        "ConsigneeCell":  "03012161615",  
+                        "ConsigneeAddress": "Jhang Road, hujra shah muqeem nearubl bank road shani saloon kot islam 
+road, Pakistan"  
+                }  
+        ]  
+}  
+ 
+   
+49   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+6.   Tracking  
+6.1  C N   Tracking  
+The method Type is GET  
+          https:  //tracking.mulphilog.com.pk/api/CNTracking  
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   consignment   string   Generated   after  Consignment number  54479401 ✔  
+which needs to be tracked  booking consignment    0537894  
+by the customer.   
+2   id   integer   ID always be 4   Tracking id    4   ✔  
+ 
+Example  
+Result  
+[  
+   {  
+     "isSuccess": "true",  
+     "message": "Consignment Number Valid",  
+     "tracking_Details": [  
+       {  
+         "ConsignmentNumber": "544794010104193",  
+         "OrderId": "biha_ibsha(wholsy)",  
+         "OriginCity": "KARACHI",  
+50   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+         "BookingDate": "20 Feb 2025",  
+         " CODAmount": null,  
+         "Weight": null,  
+         "Pieces": null,  
+         "ConsigneeName": "Name. Ibrar ul hassan",  
+         "ConsignerName": "TEST 5",  
+         "ContactNo": null,  
+         "DestinationCity": "LAHORE",  
+         "DeliveryAddress": "Adress.Farooq crane services ijtma chowk sundar road raiwind road 
+lahore",  
+         "CustomerName": null,  
+         "CustomerAccountNo": null,  
+         "HandOverDate": null,  
+         "ServiceType": null,  
+         "DeliveryRider": null,  
+         " DeliveryRiderContact": null,  
+         "SpecialInstruction": null,  
+         "InvoiceNumber": null,  
+         "InvoiceDate": null,  
+         "AmountInvoiced": null,  
+         "RRNo": null,  
+         "RRDate": null,  
+         "RRUser": null,  
+         "RRBranch": null,  
+         "PaymentID": null,  
+         "InstrumentNumber": null,  
+         "PaymentDate": null,  
+         "AmountPaid": null,  
+         "AdjustedPaymentID": null,  
+51   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+         "AdjustedPaymentDate": null,  
+         "CNTrackingDetail": [  
+           {  
+             " TrackingTagID": "1",  
+             "TransactionTime": "02/20/2025 11:49:14",  
+             "Location": null,  
+             "TrackingStatus": "Booked",  
+             "TrackingNarration": "Your order has been placed. It will be packed and prepared for 
+shipment.",  
+             "Event": null  
+           }  
+         ],  
+         "CNTrackingInvDetail": []  
+       }  
+     ]  
+   }  
+]  
+   
+52   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+6.2  Bulk Consignment Tracking  
+The method Type is POST  
+          https://mnpcourier.com/mycodapi/api/Tracking/Bulk_Consignment_Tracking_New  
+        
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   Username   string   Username will be  Test user   ✔   Username   should be 
+provided by M&P.   the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   Password   string   Password will be  12345678   ✔  
+provided.    provided by M&P.  
+Max Length:100  
+3   AccountNo   string   Needs to be passed as  Provided   by   M&P.   4T154   ✔  
+provided by M&P .  
+Max Length: 50  
+The  parameters below will be in a List  
+1   Consignments   string   Max 200 consignments   Consignment number  544794010 ✔  
+which needs to be tracked  537894  
+by the customer. It is 
+provided in single or bulk 
+booking APIs.  
+ 
+Example  
+{  
+   "Username": "test_user",  
+   "Password": "12345",  
+   "AccountNo": "4T154",  
+   "Consignments": [  
+     "544794010105160","544794010105158"  
+   ]  
+}    
+53   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+Result  
+[  
+   {  
+     "isSuccess": "true",  
+     "message": "Consignment Number Valid",  
+     "orderReferenceIdList": [  
+       "Succesfull"  
+     ],  
+     "tracking_Details": [  
+       {  
+         "ConsignmentNumber": "544794010105158",  
+         "OrderId": "asdasdasdasdasdasdas",  
+         "OriginCity": "KARACHI",  
+         "BookingDate": "12 Jun 2025",  
+         "CODAmount": "1",  
+         "Weight": "200",  
+         "Pieces": "1",  
+         "ConsigneeName": "Test Bookingt",  
+         "ConsignerName": "Aleeza",  
+         "ContactNo": "03111111111",  
+         "DestinationCity": "LAHORE",  
+         "DeliveryAddress": "Test Booking",  
+         "ServiceType": "Overnight",  
+         "PaymentID": null,  
+         "InstrumentNumber": null,  
+         "PaymentDate": null,  
+         "AmountPaid": "0",  
+         "AdjustedPaymentID": "",  
+         "AdjustedPaymentDate": "",  
+         "CNTrackingDetail": [  
+54   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+           {  
+             "ConsignmentNumber": "544794010105158",  
+             "TrackingTagID": "1",  
+             "TransactionTime": "06/12/2025 11:43:24",  
+             "Location": "KARACHI",  
+             "TrackingStatus": "Booked",  
+             "TrackingNarration": "Your order has been placed. It will be  packed and prepared for shipment.",  
+             "Event": null  
+           }  
+         ],  
+         "CNTrackingInvDetail": [  
+           {  
+             "ConsignmentNumber": "544794010105158",  
+             "InvoiceNumber": null,  
+             "InvoiceDate": null,  
+             "AmountInvoiced": "0",  
+             "InvoiceType": "Courier Invoice"  
+           }  
+         ]  
+       },  
+       {  
+         "ConsignmentNumber": "544794010105160",  
+         "OrderId": "8721895",  
+         "OriginCity": "KARACHI",  
+         "BookingDate": "12 Jun 2025",  
+         "CODAmount": "10",  
+         "Weight": "60",  
+         "Pieces": "1",  
+         "ConsigneeName": "Test Bookingt",  
+         "ConsignerName": "Aleeza",  
+55   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+         "ContactNo": "03111111111",  
+         "DestinationCity": "LAHORE",  
+         " DeliveryAddress": "Test Booking",  
+         "ServiceType": "Overnight",  
+         "PaymentID": null,  
+         "InstrumentNumber": null,  
+         "PaymentDate": null,  
+         "AmountPaid": "0",  
+         "AdjustedPaymentID": "",  
+         "AdjustedPaymentDate": "",  
+         "CNTrackingDetail": [  
+           {  
+             "ConsignmentNumber": "544794010105160",  
+             "TrackingTagID": "1",  
+             "TransactionTime": "06/12/2025 12:37:33",  
+             "Location": "KARACHI",  
+             "TrackingStatus": "Booked",  
+             "TrackingNarration": "Your order has been placed. It will be packed and prepared for shipment.",  
+             "Event": null  
+           }  
+         ],  
+         "CNTrackingInvDetail": [  
+           {  
+             "ConsignmentNumber": "544794010105160",  
+             "InvoiceNumber": null,  
+             "InvoiceDate": null,  
+             "AmountInvoiced": "0",  
+             "InvoiceType": "Courier Invoice"  
+           }  
+         ] }]}    
+56   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+7.   User Management  
+7 .1 Get Sub Accounts  
+The method Type is GET  
+          https://mnpcourier.com/mycodapi/api/UserManagement/GetSubAccounts         
+ 
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be  Test user   ✔   Username   should be the 
+provided by  M&P.   same   as   provided.  
+Max Length:50  
+Should be same as provided.    2   password   string   Password will be  12345678   ✔  
+Max Length:100   provided by M&P.  
+3   Account No   string   Needs to be passed as provided  Provided   by   M&P.   4T154   ✔  
+by M&P .  
+Max Length: 50  
+ 
+Example  
+ 
+Result  
+{  
+   " isSucces": true,  
+   "message": "Success",  
+   "locationList": [  
+     {  
+       "subAccountId": 6,  
+       "shipperName": "GulAhmed Test",  
+       "shipperAddress": "GulAhmed Test Addr" }]}  
+57   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+7 .2 Get Accounts  
+The method Type is GET  
+                 https://mnpcourier.com/mycodapi/api/UserManagement/GetAccounts  
+        
+Parameters  
+ 
+S. No   Parameter   Type   Validation   Mandatory   Description   Sample  
+1   username   string   Username will be provided by  Test user   ✔   Username   should 
+M&P.   be the same   as  
+provided.  
+Max Length:50  
+Should be same as  2   password   string   Password will be provided by  12345678   ✔  
+provided.    M&P.  
+Max Length:100  
+ 
+Example  
+ 
+Result  
+{  
+   "isSucces": true,  
+   "message": "Success",  
+   "locationList": [  
+     {  
+       "AccountNo": "4G132",  
+       "IsCod": true  
+     },  
+     {  
+       "AccountNo": "4T154",  
+       "IsCod": true  
+58   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
+
+ 
+ 
+     },  
+     {  
+       "AccountNo": "4T16962",  
+       "IsCod": false  
+     },  
+     {  
+       "AccountNo": "8435",  
+       "IsCod": false  
+     },  
+     {  
+       "AccountNo": "8Z32",  
+       "IsCod": true  
+     }  
+   ]  
+}  
+59   |  P a g e                                                                                                   C O D   A P I   D O C U M E N T  
+ 
