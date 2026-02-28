@@ -143,9 +143,10 @@ export const getParcels = async (req, res) => {
     // Filter by createdAt (exact date or month)
     // date=YYYY-MM-DD takes precedence over month=YYYY-MM
     if (date) {
-      const start = new Date(`${date}T00:00:00.000Z`);
+      // Use local timezone instead of UTC to avoid date shifting
+      const start = new Date(`${date}T00:00:00.000`);
       const end = new Date(start);
-      end.setUTCDate(end.getUTCDate() + 1);
+      end.setDate(end.getDate() + 1);
 
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
         filter.$and = [
@@ -159,9 +160,10 @@ export const getParcels = async (req, res) => {
         ];
       }
     } else if (month) {
-      const start = new Date(`${month}-01T00:00:00.000Z`);
+      // Use local timezone instead of UTC to avoid month shifting
+      const start = new Date(`${month}-01T00:00:00.000`);
       const end = new Date(start);
-      end.setUTCMonth(end.getUTCMonth() + 1);
+      end.setMonth(end.getMonth() + 1);
 
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
         filter.$and = [
@@ -178,12 +180,49 @@ export const getParcels = async (req, res) => {
 
     const [total, parcels, totalsAgg] = await Promise.all([
       Parcel.countDocuments(filter),
-      Parcel.find(filter)
-        .populate('product', 'name model category')
-        .populate('createdBy', 'username email')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit),
+      // Use aggregation to ensure unique parcels and prevent duplicates
+      Parcel.aggregate([
+        { $match: filter },
+        { $sort: { createdAt: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'products',
+            localField: 'product',
+            foreignField: '_id',
+            as: 'product'
+          }
+        },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: 'admins',
+            localField: 'createdBy',
+            foreignField: '_id',
+            as: 'createdBy'
+          }
+        },
+        { $unwind: { path: '$createdBy', preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: '$_id',
+            doc: { $first: '$$ROOT' },
+            product: { $first: '$product' },
+            createdBy: { $first: '$createdBy' }
+          }
+        },
+        {
+          $replaceRoot: {
+            newRoot: {
+              $mergeObjects: [
+                '$doc',
+                { product: '$product', createdBy: '$createdBy' }
+              ]
+            }
+          }
+        }
+      ]),
       Parcel.aggregate([
         { $match: filter },
         {
@@ -202,6 +241,13 @@ export const getParcels = async (req, res) => {
     ]);
 
     const totalProductUnits = Number(totalsAgg?.[0]?.totalProductUnits || 0);
+
+    // Debug: Check for duplicate tracking numbers
+    const trackingNumbers = parcels.map(p => p.trackingNumber).filter(Boolean);
+    const uniqueTrackingNumbers = [...new Set(trackingNumbers)];
+    if (trackingNumbers.length !== uniqueTrackingNumbers.length) {
+      console.log(`Warning: Found ${trackingNumbers.length - uniqueTrackingNumbers.length} duplicate tracking numbers in parcels`);
+    }
 
     const totalPages = Math.max(Math.ceil(total / limit), 1);
 
