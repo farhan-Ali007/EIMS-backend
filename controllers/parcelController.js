@@ -160,11 +160,22 @@ export const getParcels = async (req, res) => {
         ];
       }
     } else if (month) {
-      // Use local timezone instead of UTC to avoid month shifting
+      // Handle month input format (YYYY-MM from frontend)
       console.log(`Processing month filter: ${month}`);
-      const start = new Date(`${month}-01T00:00:00.000`);
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + 1);
+      
+      // Validate month format (YYYY-MM)
+      const monthMatch = month.match(/^(\d{4})-(\d{2})$/);
+      if (!monthMatch) {
+        console.log(`Invalid month format: ${month}`);
+        return;
+      }
+      
+      const [, year, monthNum] = monthMatch.map(Number);
+      console.log(`Parsed month: year=${year}, month=${monthNum}`);
+      
+      // Create dates using parsed values
+      const start = new Date(year, monthNum - 1, 1, 0, 0, 0, 0); // 1st day of month
+      const end = new Date(year, monthNum, 1, 0, 0, 0, 0); // 1st day of next month
       
       console.log(`Month filter dates - start: ${start.toISOString()}, end: ${end.toISOString()}`);
       console.log(`Month filter dates valid - start: ${!Number.isNaN(start.getTime())}, end: ${!Number.isNaN(end.getTime())}`);
