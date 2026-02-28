@@ -149,15 +149,8 @@ export const getParcels = async (req, res) => {
       end.setDate(end.getDate() + 1);
 
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        filter.$and = [
-          ...(Array.isArray(filter.$and) ? filter.$and : []),
-          {
-            $or: [
-              { parcelDate: { $gte: start, $lt: end } },
-              { createdAt: { $gte: start, $lt: end } },
-            ],
-          },
-        ];
+        // Filter ONLY by parcelDate (not createdAt)
+        filter.parcelDate = { $gte: start, $lt: end };
       }
     } else if (month) {
       // Handle month input format (YYYY-MM from frontend)
@@ -181,15 +174,8 @@ export const getParcels = async (req, res) => {
       console.log(`Month filter dates valid - start: ${!Number.isNaN(start.getTime())}, end: ${!Number.isNaN(end.getTime())}`);
 
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        filter.$and = [
-          ...(Array.isArray(filter.$and) ? filter.$and : []),
-          {
-            $or: [
-              { parcelDate: { $gte: start, $lt: end } },
-              { createdAt: { $gte: start, $lt: end } },
-            ],
-          },
-        ];
+        // Filter ONLY by parcelDate (not createdAt)
+        filter.parcelDate = { $gte: start, $lt: end };
       }
     }
 
