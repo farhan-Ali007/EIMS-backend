@@ -2,6 +2,7 @@ import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import Seller from '../models/Seller.js';
 import Customer from '../models/Customer.js';
+import StockHistory from '../models/StockHistory.js';
 
 // Get all sales
 export const getSales = async (req, res) => {
@@ -83,9 +84,25 @@ export const createSale = async (req, res) => {
 
     const newSale = await sale.save();
 
-    // Update product stock
-    product.stock -= quantityNum;
-    await product.save();
+    // Update product stock atomically and log StockHistory
+    const previousStock = product.stock;
+    const updated = await Product.findByIdAndUpdate(
+      productId,
+      { $inc: { stock: -quantityNum } },
+      { new: true }
+    );
+    if (updated) {
+      await StockHistory.create({
+        productId,
+        type: 'stock_out',
+        quantity: quantityNum,
+        previousStock,
+        newStock: updated.stock,
+        reason: 'Manual sale created',
+        notes: `Sale: ${newSale._id}`,
+        createdBy: req.user?.id,
+      });
+    }
 
     // Update seller commission
     seller.totalCommission += commission;

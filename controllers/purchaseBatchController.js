@@ -1,5 +1,6 @@
 import PurchaseBatch from '../models/PurchaseBatch.js';
 import Product from '../models/Product.js';
+import StockHistory from '../models/StockHistory.js';
 
 export const createPurchaseBatch = async (req, res) => {
   try {
@@ -52,10 +53,21 @@ export const createPurchaseBatch = async (req, res) => {
       totalAmount,
     });
 
-    // Update product stock
+    // Update product stock with atomic increments and StockHistory logging
     for (const item of normalizedItems) {
+      const previousStock = (await Product.findById(item.productId))?.stock || 0;
       await Product.findByIdAndUpdate(item.productId, {
         $inc: { stock: item.quantity },
+      });
+      await StockHistory.create({
+        productId: item.productId,
+        type: 'stock_in',
+        quantity: item.quantity,
+        previousStock,
+        newStock: previousStock + item.quantity,
+        reason: 'Purchase batch created',
+        notes: `Batch: ${batch.batchNumber || batch._id}`,
+        createdBy: req.user?.id,
       });
     }
 

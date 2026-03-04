@@ -3,6 +3,7 @@ import Income from '../models/Income.js';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
 import Seller from '../models/Seller.js';
+import StockHistory from '../models/StockHistory.js';
 
 // Get all bills with pagination and filters
 export const getBills = async (req, res) => {
@@ -106,7 +107,7 @@ export const createBill = async (req, res) => {
         return res.status(400).json({ message: `Product ${item.name} not found` });
       }
 
-      if (product.stock < item.quantity) {
+      if (Number(product.stock || 0) < Number(item.quantity || 0)) {
         return res.status(400).json({
           message: `Insufficient stock for ${item.name}-${item.model}. Available: ${product.stock}, Requested: ${item.quantity}`
         });
@@ -160,11 +161,43 @@ export const createBill = async (req, res) => {
     }
 
     // Update product stock
+    const decremented = [];
     for (const item of items) {
-      await Product.findByIdAndUpdate(
-        item.productId,
-        { $inc: { stock: -item.quantity } }
+      const qty = Number(item.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+
+      const updated = await Product.findOneAndUpdate(
+        { _id: item.productId, stock: { $gte: qty } },
+        { $inc: { stock: -qty } },
+        { new: true }
       );
+
+      if (!updated) {
+        for (const d of decremented) {
+          try {
+            await Product.findByIdAndUpdate(d.productId, { $inc: { stock: d.qty } });
+          } catch {
+          }
+        }
+        return res.status(400).json({
+          message: `Insufficient stock for ${item.name}-${item.model}. Requested: ${qty}`
+        });
+      }
+
+      decremented.push({ productId: updated._id, qty });
+
+      const newStock = Number(updated.stock || 0);
+      const previousStock = newStock + qty;
+      await StockHistory.create({
+        productId: updated._id,
+        type: 'stock_out',
+        quantity: qty,
+        previousStock,
+        newStock,
+        reason: `Bill ${bill.billNumber} created`,
+        notes: String(bill._id),
+        createdBy: req.user.id,
+      });
     }
 
     // Update seller commission based on total quantity
@@ -246,35 +279,81 @@ export const updateBill = async (req, res) => {
       newQuantities[key] = (newQuantities[key] || 0) + Number(item.quantity || 0);
     }
 
-    // Validate stock for new quantities, considering we are reverting old consumption
+    // Only completed bills should affect inventory.
+    // If a bill is cancelled/pending, its items should be editable without changing Product.stock.
     const productIds = Array.from(new Set([...Object.keys(oldQuantities), ...Object.keys(newQuantities)]));
 
-    for (const productId of productIds) {
-      const product = await Product.findById(productId);
-      if (!product) {
-        return res.status(400).json({ message: `Product with ID ${productId} not found` });
+    if (existingBill.status === 'completed') {
+      // Validate stock for new quantities, considering we are reverting old consumption
+      for (const productId of productIds) {
+        const product = await Product.findById(productId);
+        if (!product) {
+          return res.status(400).json({ message: `Product with ID ${productId} not found` });
+        }
+
+        const oldQty = oldQuantities[productId] || 0;
+        const newQty = newQuantities[productId] || 0;
+
+        // Effective available stock if we add back the old quantity first
+        const effectiveStock = Number(product.stock || 0) + oldQty;
+        if (effectiveStock < newQty) {
+          return res.status(400).json({
+            message: `Insufficient stock for product ${product.name}. Available: ${effectiveStock}, Requested: ${newQty}`
+          });
+        }
       }
 
-      const oldQty = oldQuantities[productId] || 0;
-      const newQty = newQuantities[productId] || 0;
+      // Apply stock changes: revert old items, apply new ones via a single delta per product
+      for (const productId of productIds) {
+        const oldQty = oldQuantities[productId] || 0;
+        const newQty = newQuantities[productId] || 0;
+        const delta = oldQty - newQty; // positive -> increase stock, negative -> decrease further
 
-      // Effective available stock if we add back the old quantity first
-      const effectiveStock = Number(product.stock || 0) + oldQty;
-      if (effectiveStock < newQty) {
-        return res.status(400).json({
-          message: `Insufficient stock for product ${product.name}. Available: ${effectiveStock}, Requested: ${newQty}`
-        });
-      }
-    }
-
-    // Apply stock changes: revert old items, apply new ones via a single delta per product
-    for (const productId of productIds) {
-      const oldQty = oldQuantities[productId] || 0;
-      const newQty = newQuantities[productId] || 0;
-      const delta = oldQty - newQty; // positive -> increase stock, negative -> decrease further
-
-      if (delta !== 0) {
-        await Product.findByIdAndUpdate(productId, { $inc: { stock: delta } });
+        if (delta !== 0) {
+          if (delta > 0) {
+            const updated = await Product.findByIdAndUpdate(
+              productId,
+              { $inc: { stock: delta } },
+              { new: true }
+            );
+            if (updated) {
+              const newStock = Number(updated.stock || 0);
+              const previousStock = newStock - delta;
+              await StockHistory.create({
+                productId: updated._id,
+                type: 'stock_in',
+                quantity: delta,
+                previousStock,
+                newStock,
+                reason: `Bill ${existingBill.billNumber} updated`,
+                notes: String(existingBill._id),
+                createdBy: req.user.id,
+              });
+            }
+          } else {
+            const qty = Math.abs(delta);
+            const updated = await Product.findOneAndUpdate(
+              { _id: productId, stock: { $gte: qty } },
+              { $inc: { stock: -qty } },
+              { new: true }
+            );
+            if (!updated) {
+              return res.status(400).json({ message: 'INSUFFICIENT_STOCK' });
+            }
+            const newStock = Number(updated.stock || 0);
+            const previousStock = newStock + qty;
+            await StockHistory.create({
+              productId: updated._id,
+              type: 'stock_out',
+              quantity: qty,
+              previousStock,
+              newStock,
+              reason: `Bill ${existingBill.billNumber} updated`,
+              notes: String(existingBill._id),
+              createdBy: req.user.id,
+            });
+          }
+        }
       }
     }
 
@@ -547,17 +626,104 @@ export const updateBillStatus = async (req, res) => {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
-    const bill = await Bill.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('createdBy', 'username email');
-
+    const bill = await Bill.findById(req.params.id);
     if (!bill) {
       return res.status(404).json({ message: 'Bill not found' });
     }
 
-    res.json(bill);
+    const fromStatus = bill.status;
+    const toStatus = status;
+
+    if (fromStatus === toStatus) {
+      const populated = await Bill.findById(bill._id)
+        .populate('createdBy', 'username email')
+        .populate('items.productId', 'name model category');
+      return res.json(populated);
+    }
+
+    // Inventory rules:
+    // - completed => stock should be deducted
+    // - cancelled/pending => stock should NOT be deducted
+    const leavingCompleted = fromStatus === 'completed' && toStatus !== 'completed';
+    const enteringCompleted = fromStatus !== 'completed' && toStatus === 'completed';
+
+    if (leavingCompleted) {
+      // Restore stock for all items
+      for (const item of bill.items) {
+        const qty = Number(item.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+
+        const updated = await Product.findByIdAndUpdate(
+          item.productId,
+          { $inc: { stock: qty } },
+          { new: true }
+        );
+
+        if (updated) {
+          const newStock = Number(updated.stock || 0);
+          const previousStock = newStock - qty;
+          await StockHistory.create({
+            productId: updated._id,
+            type: 'stock_in',
+            quantity: qty,
+            previousStock,
+            newStock,
+            reason: `Bill ${bill.billNumber} status ${fromStatus} -> ${toStatus}`,
+            notes: String(bill._id),
+            createdBy: req.user.id,
+          });
+        }
+      }
+    }
+
+    if (enteringCompleted) {
+      // Deduct stock for all items (atomic per item with rollback)
+      const decremented = [];
+      for (const item of bill.items) {
+        const qty = Number(item.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+
+        const updated = await Product.findOneAndUpdate(
+          { _id: item.productId, stock: { $gte: qty } },
+          { $inc: { stock: -qty } },
+          { new: true }
+        );
+
+        if (!updated) {
+          for (const d of decremented) {
+            try {
+              await Product.findByIdAndUpdate(d.productId, { $inc: { stock: d.qty } });
+            } catch {
+            }
+          }
+          return res.status(400).json({ message: 'INSUFFICIENT_STOCK' });
+        }
+
+        decremented.push({ productId: updated._id, qty });
+
+        const newStock = Number(updated.stock || 0);
+        const previousStock = newStock + qty;
+        await StockHistory.create({
+          productId: updated._id,
+          type: 'stock_out',
+          quantity: qty,
+          previousStock,
+          newStock,
+          reason: `Bill ${bill.billNumber} status ${fromStatus} -> ${toStatus}`,
+          notes: String(bill._id),
+          createdBy: req.user.id,
+        });
+      }
+    }
+
+    bill.status = toStatus;
+    await bill.save();
+
+    const populated = await Bill.findById(bill._id)
+      .populate('createdBy', 'username email')
+      .populate('items.productId', 'name model category');
+
+    res.json(populated);
   } catch (error) {
     console.error('Error updating bill status:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -578,16 +744,32 @@ export const cancelBill = async (req, res) => {
     // Restore product stock only if this bill was previously completed
     if (previousStatus === 'completed') {
       for (const item of bill.items) {
-        await Product.findByIdAndUpdate(
+        const qty = Number(item.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const updated = await Product.findByIdAndUpdate(
           item.productId,
-          { $inc: { stock: item.quantity } }
+          { $inc: { stock: qty } },
+          { new: true }
         );
+        if (updated) {
+          const newStock = Number(updated.stock || 0);
+          const previousStock = newStock - qty;
+          await StockHistory.create({
+            productId: updated._id,
+            type: 'stock_in',
+            quantity: qty,
+            previousStock,
+            newStock,
+            reason: `Bill ${bill.billNumber} cancelled`,
+            notes: String(bill._id),
+            createdBy: req.user.id,
+          });
+        }
       }
     }
 
     bill.status = 'cancelled';
     await bill.save();
-
     res.json({ message: 'Bill cancelled successfully' });
   } catch (error) {
     console.error('Error cancelling bill:', error);
@@ -647,5 +829,86 @@ export const addBillPayment = async (req, res) => {
   } catch (error) {
     console.error('Error adding bill payment:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+export const getBillStockMovements = async (req, res) => {
+  try {
+    const billId = String(req.params.id || '').trim();
+    if (!billId) {
+      return res.status(400).json({ message: 'Bill id is required' });
+    }
+
+    const movements = await StockHistory.aggregate([
+      { $match: { notes: billId } },
+      { $sort: { createdAt: 1 } },
+      {
+        $group: {
+          _id: { productId: '$productId', type: '$type' },
+          totalQty: { $sum: '$quantity' },
+          firstAt: { $first: '$createdAt' },
+          lastAt: { $last: '$createdAt' },
+        },
+      },
+      {
+        $group: {
+          _id: '$_id.productId',
+          stockIn: {
+            $sum: {
+              $cond: [{ $eq: ['$_id.type', 'stock_in'] }, '$totalQty', 0],
+            },
+          },
+          stockOut: {
+            $sum: {
+              $cond: [{ $eq: ['$_id.type', 'stock_out'] }, '$totalQty', 0],
+            },
+          },
+          firstAt: { $min: '$firstAt' },
+          lastAt: { $max: '$lastAt' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          productId: '$_id',
+          stockIn: 1,
+          stockOut: 1,
+          net: { $subtract: ['$stockIn', '$stockOut'] },
+          firstAt: 1,
+          lastAt: 1,
+          product: {
+            _id: '$product._id',
+            name: '$product.name',
+            model: '$product.model',
+            category: '$product.category',
+          },
+        },
+      },
+      { $sort: { net: -1 } },
+    ]);
+
+    const totals = movements.reduce(
+      (acc, m) => {
+        acc.stockIn += Number(m.stockIn || 0);
+        acc.stockOut += Number(m.stockOut || 0);
+        acc.net += Number(m.net || 0);
+        return acc;
+      },
+      { stockIn: 0, stockOut: 0, net: 0 }
+    );
+
+    return res.json({ billId, totals, movements });
+  } catch (error) {
+    console.error('Error fetching bill stock movements:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

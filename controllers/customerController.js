@@ -2,6 +2,7 @@ import Customer from '../models/Customer.js';
 import Sale from '../models/Sale.js';
 import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
+import StockHistory from '../models/StockHistory.js';
 
 const toObjectIdString = (v) => (v == null ? '' : String(v));
 
@@ -101,7 +102,8 @@ const validateStockForResolved = (resolved) => {
   return { ok: true };
 };
 
-const applyStockDeltas = async (deltas) => {
+const applyStockDeltas = async (deltas, options = {}) => {
+  const { reason = 'Customer operation', notes = '', createdBy } = options;
   const touched = [];
 
   try {
@@ -119,15 +121,34 @@ const applyStockDeltas = async (deltas) => {
         if (!updated) {
           throw new Error('INSUFFICIENT_STOCK');
         }
-        touched.push({ productId, delta });
+        touched.push({ productId, delta, previousStock: Number(updated.stock || 0) + delta, newStock: Number(updated.stock || 0) });
       } else {
-        await Product.findByIdAndUpdate(productId, { $inc: { stock: -delta } });
-        touched.push({ productId, delta });
+        const updated = await Product.findByIdAndUpdate(
+          productId,
+          { $inc: { stock: -delta } },
+          { new: true }
+        );
+        touched.push({ productId, delta, previousStock: Number(updated.stock || 0) + delta, newStock: Number(updated.stock || 0) });
       }
+    }
+
+    // Create StockHistory entries for all applied deltas
+    for (const entry of touched) {
+      await StockHistory.create({
+        productId: entry.productId,
+        type: entry.delta > 0 ? 'stock_out' : 'stock_in',
+        quantity: Math.abs(entry.delta),
+        previousStock: entry.previousStock,
+        newStock: entry.newStock,
+        reason,
+        notes,
+        createdBy,
+      });
     }
 
     return { ok: true };
   } catch (error) {
+    // Rollback applied stock changes
     for (const t of touched) {
       try {
         const revert = -Number(t.delta || 0);
@@ -368,7 +389,12 @@ export const createCustomer = async (req, res) => {
         }
 
         const stockApplied = await applyStockDeltas(
-          resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) }))
+          resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) })),
+          {
+            reason: 'Customer created',
+            notes: `Customer: ${customer.name || 'Unnamed'}`,
+            createdBy: req.user?.id,
+          }
         );
 
         if (!stockApplied.ok) {
@@ -451,7 +477,12 @@ export const createCustomer = async (req, res) => {
       }
 
       const stockApplied = await applyStockDeltas(
-        resolvedForSingle.resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) }))
+        resolvedForSingle.resolved.map((x) => ({ productId: x.productId, delta: Number(x.quantity || 0) })),
+        {
+          reason: 'Customer created (legacy single product)',
+          notes: `Customer: ${customer.name || 'Unnamed'}`,
+          createdBy: req.user?.id,
+        }
       );
 
       if (!stockApplied.ok) {
@@ -474,7 +505,11 @@ export const createCustomer = async (req, res) => {
     } catch (saveError) {
       if (Array.isArray(appliedStockDeltas) && appliedStockDeltas.length > 0) {
         try {
-          await applyStockDeltas(appliedStockDeltas.map((d) => ({ productId: d.productId, delta: -Number(d.delta || 0) })));
+          await applyStockDeltas(appliedStockDeltas.map((d) => ({ productId: d.productId, delta: -Number(d.delta || 0) })), {
+            reason: 'Customer creation rollback',
+            notes: `Failed to save customer: ${customer.name || 'Unnamed'}`,
+            createdBy: req.user?.id,
+          });
         } catch {
           // ignore
         }
@@ -564,7 +599,12 @@ export const updateCustomer = async (req, res) => {
         .filter((x) => x.delta !== 0);
 
       const stockApplied = await applyStockDeltas(
-        stockPlan.map((x) => ({ productId: x.productId, delta: x.delta }))
+        stockPlan.map((x) => ({ productId: x.productId, delta: x.delta })),
+        {
+          reason: 'Customer updated',
+          notes: `Customer: ${existingCustomer.name || 'Unnamed'}`,
+          createdBy: req.user?.id,
+        }
       );
 
       if (!stockApplied.ok) {
@@ -606,7 +646,11 @@ export const updateCustomer = async (req, res) => {
         updatedCustomer = await existingCustomer.save();
       } catch (saveError) {
         try {
-          await applyStockDeltas(stockPlan.map((x) => ({ productId: x.productId, delta: -Number(x.delta || 0) })));
+          await applyStockDeltas(stockPlan.map((x) => ({ productId: x.productId, delta: -Number(x.delta || 0) })), {
+            reason: 'Customer update rollback',
+            notes: `Failed to save customer: ${existingCustomer.name || 'Unnamed'}`,
+            createdBy: req.user?.id,
+          });
         } catch {
           // ignore
         }
@@ -974,7 +1018,21 @@ export const deleteCustomer = async (req, res) => {
         for (const item of products) {
           const qty = Number(item.quantity || 0);
           if (item.productId && qty > 0) {
-            await Product.findByIdAndUpdate(String(item.productId), { $inc: { stock: qty } });
+            const product = await Product.findById(String(item.productId));
+            if (product) {
+              const previousStock = Number(product.stock || 0);
+              await Product.findByIdAndUpdate(String(item.productId), { $inc: { stock: qty } });
+              await StockHistory.create({
+                productId: String(item.productId),
+                type: 'stock_in',
+                quantity: qty,
+                previousStock,
+                newStock: previousStock + qty,
+                reason: 'Customer deleted',
+                notes: `Customer deleted: ${customer.name || 'Unnamed'}`,
+                createdBy: req.user?.id,
+              });
+            }
           }
         }
       } catch (stockError) {

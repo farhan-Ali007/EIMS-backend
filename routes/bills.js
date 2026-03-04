@@ -11,6 +11,7 @@ import {
   cancelBill,
   addBillPayment,
   getCustomerLastProductPrice,
+  getBillStockMovements,
 } from '../controllers/billController.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.get('/', getBills);
 router.get('/stats/overview', getBillingStats);
 router.get('/customer/:customerId/history', getCustomerHistory);
 router.get('/customer/:customerId/last-price', getCustomerLastProductPrice);
+router.get('/:id/stock-movements', getBillStockMovements);
 router.get('/:id', getBillById);
 router.post('/', createBill);
 router.put('/:id', updateBill);

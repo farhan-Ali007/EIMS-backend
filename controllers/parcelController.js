@@ -1,5 +1,6 @@
 import Parcel from '../models/Parcel.js';
 import Product from '../models/Product.js';
+import StockHistory from '../models/StockHistory.js';
 
 const normalizeParcelProducts = ({ productId, productsInfo }) => {
   if (Array.isArray(productsInfo) && productsInfo.length > 0) {
@@ -18,48 +19,77 @@ const normalizeParcelProducts = ({ productId, productsInfo }) => {
   return [];
 };
 
-const applyParcelStockPlan = async (stockPlan) => {
+const applyParcelStockPlan = async (stockPlan, options = {}) => {
+  const { reason = 'Parcel operation', notes = '', createdBy } = options;
   const plan = Array.isArray(stockPlan) ? stockPlan : [];
   const decremented = [];
 
-  for (const item of plan) {
-    const delta = Number(item?.delta || 0);
-    const productId = item?.productId ? String(item.productId) : '';
-    if (!productId || !Number.isFinite(delta) || delta === 0) continue;
+  try {
+    for (const item of plan) {
+      const delta = Number(item?.delta || 0);
+      const productId = item?.productId ? String(item.productId) : '';
+      if (!productId || !Number.isFinite(delta) || delta === 0) continue;
 
-    if (delta > 0) {
-      const updated = await Product.findOneAndUpdate(
-        { _id: productId, stock: { $gte: delta } },
-        { $inc: { stock: -delta } },
-        { new: true }
-      );
-      if (!updated) {
-        for (const d of decremented) {
-          try {
-            await Product.findByIdAndUpdate(d.productId, { $inc: { stock: d.delta } });
-          } catch {
+      if (delta > 0) {
+        const updated = await Product.findOneAndUpdate(
+          { _id: productId, stock: { $gte: delta } },
+          { $inc: { stock: -delta } },
+          { new: true }
+        );
+        if (!updated) {
+          for (const d of decremented) {
+            try {
+              await Product.findByIdAndUpdate(d.productId, { $inc: { stock: d.delta } });
+            } catch {}
           }
+          return { ok: false, error: new Error('INSUFFICIENT_STOCK') };
         }
-        return { ok: false, error: new Error('INSUFFICIENT_STOCK') };
+        decremented.push({ productId, delta, previousStock: Number(updated.stock || 0) + delta, newStock: Number(updated.stock || 0) });
       }
-      decremented.push({ productId, delta });
     }
-  }
 
-  for (const item of plan) {
-    const delta = Number(item?.delta || 0);
-    const productId = item?.productId ? String(item.productId) : '';
-    if (!productId || !Number.isFinite(delta) || delta === 0) continue;
+    for (const item of plan) {
+      const delta = Number(item?.delta || 0);
+      const productId = item?.productId ? String(item.productId) : '';
+      if (!productId || !Number.isFinite(delta) || delta === 0) continue;
 
-    if (delta < 0) {
+      if (delta < 0) {
+        const updated = await Product.findByIdAndUpdate(
+          productId,
+          { $inc: { stock: Math.abs(delta) } },
+          { new: true }
+        );
+        decremented.push({ productId, delta, previousStock: Number(updated?.stock || 0) - Math.abs(delta), newStock: Number(updated?.stock || 0) });
+      }
+    }
+
+    // Create StockHistory entries for all applied changes
+    for (const entry of decremented) {
+      await StockHistory.create({
+        productId: entry.productId,
+        type: entry.delta > 0 ? 'stock_out' : 'stock_in',
+        quantity: Math.abs(entry.delta),
+        previousStock: entry.previousStock,
+        newStock: entry.newStock,
+        reason,
+        notes,
+        createdBy,
+      });
+    }
+
+    return { ok: true };
+  } catch (error) {
+    // Rollback applied changes
+    for (const d of decremented) {
       try {
-        await Product.findByIdAndUpdate(productId, { $inc: { stock: Math.abs(delta) } });
-      } catch {
-      }
+        const revert = -Number(d.delta || 0);
+        if (revert !== 0) {
+          await Product.findByIdAndUpdate(String(d.productId), { $inc: { stock: revert } });
+        }
+      } catch {}
     }
+    return { ok: false, error };
   }
-
-  return { ok: true };
 };
 
 // Get parcels list (with optional filters)
@@ -277,7 +307,11 @@ export const createParcel = async (req, res) => {
       delta: Number(x.quantity || 0),
     }));
 
-    const stockApplied = await applyParcelStockPlan(stockPlan);
+    const stockApplied = await applyParcelStockPlan(stockPlan, {
+      reason: 'Parcel created',
+      notes: `Parcel: ${trackingNumber}`,
+      createdBy: req.admin?._id,
+    });
     if (!stockApplied.ok) {
       return res.status(400).json({ message: 'Insufficient stock' });
     }
@@ -305,7 +339,11 @@ export const createParcel = async (req, res) => {
     } catch (saveError) {
       // rollback the stock deduction if parcel creation fails
       try {
-        await applyParcelStockPlan(stockPlan.map((x) => ({ productId: x.productId, delta: -Number(x.delta || 0) })));
+        await applyParcelStockPlan(stockPlan.map((x) => ({ productId: x.productId, delta: -Number(x.delta || 0) })), {
+          reason: 'Parcel creation rollback',
+          notes: `Failed to save parcel: ${trackingNumber}`,
+          createdBy: req.admin?._id,
+        });
       } catch {
       }
       throw saveError;
@@ -353,7 +391,11 @@ export const updateParcelStatus = async (req, res) => {
         .filter((x) => x.productId && Number.isFinite(x.delta) && x.delta < 0);
 
       if (stockPlan.length > 0) {
-        const stockApplied = await applyParcelStockPlan(stockPlan);
+        const stockApplied = await applyParcelStockPlan(stockPlan, {
+          reason: 'Parcel returned',
+          notes: `Parcel returned: ${parcel.trackingNumber}`,
+          createdBy: req.admin?._id,
+        });
         if (!stockApplied.ok) {
           return res.status(500).json({ message: 'Failed to restore stock for returned parcel' });
         }
@@ -491,7 +533,11 @@ export const updateParcel = async (req, res) => {
         }
       }
 
-      const stockApplied = await applyParcelStockPlan(stockPlan);
+      const stockApplied = await applyParcelStockPlan(stockPlan, {
+        reason: 'Parcel updated',
+        notes: `Parcel updated: ${parcel.trackingNumber}`,
+        createdBy: req.admin?._id,
+      });
       if (!stockApplied.ok) {
         return res.status(400).json({ message: 'Insufficient stock' });
       }
@@ -538,7 +584,21 @@ export const deleteParcel = async (req, res) => {
       const qty = Number(item?.quantity || 0);
       if (!id || !Number.isFinite(qty) || qty <= 0) continue;
       try {
-        await Product.findByIdAndUpdate(id, { $inc: { stock: qty } });
+        const product = await Product.findById(id);
+        if (product) {
+          const previousStock = Number(product.stock || 0);
+          await Product.findByIdAndUpdate(id, { $inc: { stock: qty } });
+          await StockHistory.create({
+            productId: id,
+            type: 'stock_in',
+            quantity: qty,
+            previousStock,
+            newStock: previousStock + qty,
+            reason: 'Parcel deleted',
+            notes: `Parcel deleted: ${parcel.trackingNumber}`,
+            createdBy: req.admin?._id,
+          });
+        }
       } catch (stockError) {
         console.error('Error restoring stock when deleting parcel:', stockError);
       }
